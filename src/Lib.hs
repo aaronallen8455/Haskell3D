@@ -31,6 +31,8 @@ import Data.Maybe (catMaybes)
 import Data.Fixed (mod')
 import Data.Foldable
 import Data.Array
+import qualified Data.IntSet as Set
+import qualified Data.IntMap as M
 
 -- global units
 type GU = Double
@@ -59,18 +61,37 @@ type Vect = Point
 
 type Rotation = Coord Radian
 
--- | Stores both the nodes and edges of a mesh
--- edges should be bi-directional
-data Mesh a = Mesh { keyNode :: Array Int a, keyEdges :: Array Int [Int] }
+-- | A tree of connected verticies, doesn't contain cycles
+data VertTree a = Vertex a [VertTree a] | Leaf a deriving Functor
 
-instance Functor Mesh where
-  fmap f (Mesh v k) = Mesh (fmap f v) k
+-- | builds a mesh from a list of bi-directional edges
+meshFromEdges :: [(Point, Int, [Int])] -> Mesh
+meshFromEdges edges = tree' where
+  bounds = (0, length edges)
+  items = array bounds [ (k, v) | (v, k, _) <- edges ]
+  keyMap = array bounds [ (k, ks) | (_, k, ks) <- edges ]
+  (tree, _) = buildTree 0 M.empty
+  tree' = (items !) <$> tree
+  -- | Constructs a vertex tree where every branch is unique
+  buildTree :: Int -> M.IntMap Bool -> (VertTree Int, M.IntMap Bool)
+  buildTree i m
+    | Just False <- M.lookup i m = (Leaf i, M.adjust not i m)
+    | otherwise = (Vertex i ts, m''')
+    where
+      children = keyMap ! i
+      m' = M.insert i False m
+      (ts, m'') = foldr f ([], m') children
+      m''' | any isLeaf ts = M.adjust not i m'' -- if any children are leaves, seal this node
+           | otherwise = m''
+      f i (acc, m)
+        | Just True <- M.lookup i m = (acc, m) -- a leaf already exists btwn these two
+        | otherwise = let (t, m') = buildTree i m in (t:acc, m')
+      isLeaf (Vertex _ _) = False
+      isLeaf (Leaf _) = True
 
-meshFromEdges :: [(a, Int, [Int])] -> Mesh a
-meshFromEdges edges = Mesh items edgeMap where
-  bound = (0, length edges)
-  items = array bound [(k, v) | (v, k, _) <- edges]
-  edgeMap = array bound [(k, ks) | (_, k, ks) <- edges]
+type Mesh = VertTree Point
+
+type ProjectedMesh = VertTree (Maybe CCoord)
 
 data Camera = Camera { camLoc :: Point, camRot :: Rotation }
 
@@ -84,7 +105,7 @@ instance Num a => Monoid (Coord a) where
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
-perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Maybe CCoord))
+perspectiveTransform :: Functor f => Camera -> f Mesh -> f ProjectedMesh
 perspectiveTransform cam@Camera{..} = 
   fmap $ \m -> pers <$> rotatePoints m camLoc camRot where
     pers (Coord x' y' z')
@@ -103,6 +124,7 @@ translateCam cam uv d = cam{camLoc = translatePoint (camLoc cam) uv d}
 translatePoint :: Point -> Vect -> GU -> Point
 translatePoint p uv d = head $ translatePoints [p] uv d
 
+-- | Translates multiple points along a unit vector
 translatePoints :: Functor f => f Point -> Vect -> GU -> f Point
 translatePoints m uv d = fmap (\p -> translatePoint p uv d) m
 
@@ -128,6 +150,15 @@ rotatePoints pts pivot r = mappend pivot . rotate . mappend (fmap negate pivot) 
     dx = cy * (sz * y' + cz * x') - sy * z'
     dy = sz * (cy * z' + sy * (sz * y' + cz * x')) + cx * (cz * y' - sz * x')
     dz = cx * (cy * z' + sy * (sz * y' + cz * x')) - sx * (cz * y' - sz * x')
+
+-- | Normalize a vector and also get the magnitude of the original vector
+normalizeVector :: Vect -> (Vect, GU)
+normalizeVector v = let m = distance (Coord 0 0 0) v in (fmap (/ m) v, m)
+
+scalePoints :: Functor f => f Point -> Point -> Double -> f Point
+scalePoints pts c scale = fmap f pts where
+  f pt = translatePoint pt nv (d * scale) where
+    (nv, d) = normalizeVector $ pt <> fmap negate c
 
 -- | Find the distance between two points.
 distance :: Point -> Point -> GU

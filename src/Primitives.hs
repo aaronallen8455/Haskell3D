@@ -4,7 +4,7 @@ import Lib
 import Control.Monad (guard)
 
 -- | create a circle with given radius and subdivision
-circle :: GU -> Int -> Maybe (Mesh Point)
+circle :: GU -> Int -> Maybe Mesh
 circle radius sub
   | radius <= 0 = Nothing
   | sub <= 2 = Nothing
@@ -28,17 +28,33 @@ circlePoints radius sub
     rotate :: Radian -> Point
     rotate r = rotateVect (Coord 1 0 0) (Coord 0 r 0)
 
--- [(node, key, [key])]
-
 -- | Constructs a sphere given a radius,
 -- radial subdivisions, and vertical subdivisions.
-sphere :: GU -> Int -> Int -> Maybe (Mesh Point)
+sphere :: GU -> Int -> Int -> Maybe Mesh
 sphere radius radialSubs verticalSubs
   | radius <= 0 = Nothing
   | radialSubs < 3 = Nothing
   | verticalSubs < 1 = Nothing
-  | otherwise = undefined
+  | otherwise = do
+    circles <- mapM (flip circlePoints radialSubs) radii
+    let translated = zipWith (\c -> translatePoints c (Coord 0 1 0)) circles heights
+        indexed = zip [1..] $ concat translated
+        edges = map makeEdge indexed
+    return . meshFromEdges $ bottom : top : edges
   where
-    top = (Coord 0 1 0, 0, [1..radialSubs])
     vsrs = verticalSubs * radialSubs
-    bottom = (Coord 0 0 0, vsrs + 1, take radialSubs [vsrs,vsrs-1..])
+    top = (Coord 0 (2 * radius) 0, vsrs + 1, take radialSubs [vsrs,vsrs-1..])
+    bottom = (Coord 0 0 0, 0, [1..radialSubs])
+    angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
+    radii = map ((*radius) . sin) $ take verticalSubs [angle..]
+    heights = take verticalSubs [2 * radius / fromIntegral verticalSubs..] :: [GU]
+    -- make edges for an inner circle point
+    makeEdge (i, p) = (p, i, [above, below, left, right]) where
+      above = min (vsrs + 1) $ i + radialSubs
+      below = max 0 $ i - radialSubs
+      mo = mod i radialSubs
+      left | mo == 1 = i - 1 + radialSubs
+           | otherwise = i - 1
+      right | mo == 0 = i + 1 - radialSubs
+            | otherwise = i + 1
+    
