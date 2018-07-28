@@ -1,20 +1,24 @@
 import Test.Hspec
 import Lib
+import Primitives
+import Debug.Trace
 
 main :: IO ()
 main = hspec $ do
-  describe "Plane and line intersection" $ do
-    it "should find intersection with origin plane" $ do
-      let pl1 = Plane (Point 0 0 0) (Point 0 1 0)
-          ln1 = Line (Point 1 1 1) (Point 1 1 1)
-      planeVectorIntersect pl1 ln1 `shouldBe` Just (Point 0 0 0)
-    it "should fail if the line doesn't intersect" $ do
-      let pl = Plane (Point 0 0 0) (Point 0 1 0)
-          ln = Line (Point 1 1 1) (Point 1 0 1)
-      planeVectorIntersect pl ln `shouldBe` Nothing
   describe "Distance" $ do
     it "should find the diagonal of a unit cube" $ do
-      distance (Point 0 0 0) (Point 1 1 1) / 100 * 100 `shouldBe` sqrt 3 / 100 * 100
-  describe "Rotate" $ do
-    it "should rotate 90deg on y-axis" $ do
-      rotate (Point 0 0 1) (Point 0 0 0) 0 0 0 (pi / 2) `shouldBe` Point (-1) 0 0
+      distance (Coord 0 0 0) (Coord 1 1 1) / 100 * 100 `shouldBe` sqrt 3 / 100 * 100
+  describe "PointCircle" $ do
+    let (Just pts) = circlePoints 1 6
+    it "should have the correct number of points" $ do
+      length pts `shouldBe` 6
+  describe "Circle" $ do
+    let (Just c) = circle 1 6
+    it "should have the correct number of vertices" $ do
+      length c `shouldBe` 6
+  --describe "Sphere" $ do
+  --  let (Just s) = sphere 2 6 4
+  --  it "should have the correct number of vertices" $ do
+  --    length s `shouldBe` 26
+    --it "should be centered correctly" $ do
+    --  fmap ((*100) . (/100)) (getCenter s) `shouldBe` Coord 0 1 0

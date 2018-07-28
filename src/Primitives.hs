@@ -15,7 +15,7 @@ circle radius sub
   where
     angle = 2 * pi / fromIntegral sub
     ls :: [[Int]]
-    ls = zipWith (\a b -> [a, b]) (sub - 1 : [0..sub - 2]) . reverse $ 0 : [sub-1, sub-2..1]
+    ls = zipWith (\a b -> [a, b]) (sub - 1 : [0..]) . reverse $ 0 : [sub-1, sub-2..1]
 
 -- | create a circle of points
 circlePoints :: GU -> Int -> Maybe [Point]
@@ -46,8 +46,9 @@ sphere radius radialSubs verticalSubs
     top = (Coord 0 (2 * radius) 0, vsrs + 1, take radialSubs [vsrs,vsrs-1..])
     bottom = (Coord 0 0 0, 0, [1..radialSubs])
     angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
-    radii = map ((*radius) . sin) $ take verticalSubs [angle..]
-    heights = take verticalSubs [2 * radius / fromIntegral verticalSubs..] :: [GU]
+    radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
+    step = 2 * radius / fromIntegral verticalSubs
+    heights = take verticalSubs [step, step * 2..] :: [GU]
     -- make edges for an inner circle point
     makeEdge (i, p) = (p, i, [above, below, left, right]) where
       above = min (vsrs + 1) $ i + radialSubs
