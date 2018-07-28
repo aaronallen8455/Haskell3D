@@ -1,22 +1,28 @@
 {-# language RecordWildCards #-}
 {-# language DeriveFunctor #-}
-{-# language DeriveFoldable #-}
 
 -- https://jsfiddle.net/gwbse86v/17/
 
 module Lib
     ( Coord (..)
     , GU
+    , Radian
+    , Rotation
+    , CCoord
     , Point
     , Vect
-    , Mesh (..)
-    , Vertex
+    , Mesh
+    , meshFromEdges
     , Camera (..)
     , perspectiveTransform
     , translateCam
+    , translatePoint
+    , translatePoints
     , rotateCam
     , rotateVect
     , rotatePoint
+    , rotatePoints
+    , distance
     ) where
 
 import Control.Monad (guard)
@@ -24,6 +30,7 @@ import Data.Semigroup ((<>))
 import Data.Maybe (catMaybes)
 import Data.Fixed (mod')
 import Data.Foldable
+import Data.Array
 
 -- global units
 type GU = Double
@@ -41,8 +48,9 @@ displayHeight = 550
 
 type Radian = Double
 
-data Coord a = Coord { x :: a, y :: a, z :: a } deriving (Eq, Show, Ord, Functor)
+data Coord a = Coord { x :: a, y :: a, z :: a } deriving (Eq, Ord, Functor)
 
+-- 2d canvas coordinate
 data CCoord = CCoord { cx :: CU, cy :: CU }
 
 type Point = Coord GU
@@ -51,10 +59,18 @@ type Vect = Point
 
 type Rotation = Coord Radian
 
-data Mesh a = Mesh a [Mesh a] deriving (Eq, Show, Functor)
+-- | Stores both the nodes and edges of a mesh
+-- edges should be bi-directional
+data Mesh a = Mesh { keyNode :: Array Int a, keyEdges :: Array Int [Int] }
 
-type Vertex = Mesh Point
+instance Functor Mesh where
+  fmap f (Mesh v k) = Mesh (fmap f v) k
 
+meshFromEdges :: [(a, Int, [Int])] -> Mesh a
+meshFromEdges edges = Mesh items edgeMap where
+  bound = (0, length edges)
+  items = array bound [(k, v) | (v, k, _) <- edges]
+  edgeMap = array bound [(k, ks) | (_, k, ks) <- edges]
 
 data Camera = Camera { camLoc :: Point, camRot :: Rotation }
 
@@ -65,45 +81,53 @@ instance Num a => Monoid (Coord a) where
   mempty = Coord 0 0 0
   mappend = (<>)
   
--- | Takes a list of Vertices and projects all the points in each one
+-- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
-perspectiveTransform :: Camera -> [Vertex] -> [Mesh (Maybe CCoord)]
-perspectiveTransform cam@Camera{..} = map (fmap transform) where
-  [sx, sy, sz, cx, cy, cz] = [(t . f) camRot | t <- [sin, cos], f <- [x, y, z]]
-  transform :: Point -> Maybe CCoord
-  transform pt 
-    | dz >= focalLength = Just $ CCoord bx by
-    | otherwise = Nothing -- if dz is negative, point is behind the camera
-    where
-      (Coord x' y' z') = pt <> fmap negate camLoc
-      dx = cy * (sz * y' + cz * x') - sy * z'
-      dy = sz * (cy * z' + sy * (sz * y' + cz * x')) + cx * (cz * y' - sz * x')
-      dz = cx * (cy * z' + sy * (sz * y' + cz * x')) - sx * (cz * y' - sz * x')
-      bx = focalLength / dz * dx
-      by = focalLength / dz * dy
+perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Maybe CCoord))
+perspectiveTransform cam@Camera{..} = 
+  fmap $ \m -> pers <$> rotatePoints m camLoc camRot where
+    pers (Coord x' y' z')
+      | z' >= focalLength = Just $ CCoord bx by
+      | otherwise = Nothing
+      where
+        fz = focalLength / z'
+        bx = fz * x'
+        by = fz * y'
 
 -- | Translate the camera along a unit vector.
 translateCam :: Camera -> Vect -> GU -> Camera
-translateCam cam v d = cam{camLoc = camLoc cam <> fmap (*d) v}
+translateCam cam uv d = cam{camLoc = translatePoint (camLoc cam) uv d}
+
+-- | Translate a point along a unit vector
+translatePoint :: Point -> Vect -> GU -> Point
+translatePoint p uv d = head $ translatePoints [p] uv d
+
+translatePoints :: Functor f => f Point -> Vect -> GU -> f Point
+translatePoints m uv d = fmap (\p -> translatePoint p uv d) m
 
 -- | Add a rotation vector to the camera's current rotation.
 rotateCam :: Camera -> Rotation -> Camera
-rotateCam cam v = cam{camRot = wrap <$> camRot cam <> v} where
+rotateCam cam v = cam{ camRot = wrap <$> camRot cam <> v } where
   wrap r | r < negate pi = pi - mod' (negate r) pi
          | r > pi = negate pi + mod' r pi
 
 -- | Rotate a vector
 rotateVect :: Vect -> Rotation -> Vect
-rotateVect (Coord x' y' z') r = Coord dx dy dz where
-  [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
-  dx = cy * (sz * y' + cz * x') - sy * z'
-  dy = sz * (cy * z' + sy * (sz * y' + cz * x')) + cx * (cz * y' - sz * x')
-  dz = cx * (cy * z' + sy * (sz * y' + cz * x')) - sx * (cz * y' - sz * x')
+rotateVect v r = rotatePoint v mempty r
 
--- | Rotate a point about a pivot
+-- | Rotate a point around a pivot
 rotatePoint :: Point -> Point -> Rotation -> Point
-rotatePoint target pivot r = rotateVect (target <> fmap negate pivot) r <> pivot
+rotatePoint target pivot r = head $ rotatePoints [target] pivot r
+
+-- | Rotate some points around a pivot
+rotatePoints :: Functor f => f Point -> Point -> Rotation -> f Point
+rotatePoints pts pivot r = mappend pivot . rotate . mappend (fmap negate pivot) <$> pts where
+  [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
+  rotate (Coord x' y' z') = Coord dx dy dz where
+    dx = cy * (sz * y' + cz * x') - sy * z'
+    dy = sz * (cy * z' + sy * (sz * y' + cz * x')) + cx * (cz * y' - sz * x')
+    dz = cx * (cy * z' + sy * (sz * y' + cz * x')) - sx * (cz * y' - sz * x')
 
 -- | Find the distance between two points.
 distance :: Point -> Point -> GU
