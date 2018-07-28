@@ -70,13 +70,13 @@ type Rotation = Coord Radian
 data VertTree a = Vertex a [VertTree a] | Leaf a deriving (Functor, Foldable, Show)
 
 -- | builds a mesh from a list of bi-directional edges
-meshFromEdges :: [(Point, Int, [Int])] -> Mesh
-meshFromEdges edges = tree' where
+meshFromEdges :: [(Point, Int, [Int])] -> Mesh Point
+meshFromEdges edges = Mesh items tree where
   bounds = (0, length edges)
   items = array bounds [ (k, v) | (v, k, _) <- edges ]
   keyMap = array bounds [ (k, ks) | (_, k, ks) <- edges ]
   (tree, _, _) = buildTree 0 (-1) IS.empty S.empty
-  tree' = (items !) <$> tree
+  --tree' = (items !) <$> tree
   -- | Constructs a vertex tree where every branch is unique
   buildTree :: Int -> Int -> IS.IntSet -> S.Set (Int, Int) -> (VertTree Int, IS.IntSet, S.Set (Int, Int))
   buildTree i p visited es
@@ -94,15 +94,18 @@ meshFromEdges edges = tree' where
       --     | otherwise = m''
       f i' k@(acc, visited, es)
         | S.member (min i' i, max i' i) es = k
-        | IS.member i' visited = (Leaf i : acc, visited, S.insert (min i' i, max i' i) es)
+        | IS.member i' visited = (Leaf i' : acc, visited, S.insert (min i' i, max i' i) es)
         -- | Just True <- M.lookup i m = (acc, m) -- a leaf already exists btwn these two
         | otherwise = let (t, visited', es') = buildTree i' i visited es in (t:acc, visited', es')
       --isLeaf (Vertex _ _) = False
       --isLeaf (Leaf _) = True
 
-type Mesh = VertTree Point
+data Mesh a = Mesh (Array Int a) (VertTree Int)
 
-type ProjectedMesh = VertTree (Maybe CCoord)
+instance Functor Mesh where
+  fmap f (Mesh a t) = Mesh (fmap f a) t
+instance Foldable Mesh where
+  foldr f z (Mesh a t) = foldr f z a
 
 data Camera = Camera { camLoc :: Point, camRot :: Rotation }
 
@@ -116,7 +119,7 @@ instance Num a => Monoid (Coord a) where
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
-perspectiveTransform :: Functor f => Camera -> f Mesh -> f ProjectedMesh
+perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Maybe CCoord))
 perspectiveTransform cam@Camera{..} = 
   fmap $ \m -> pers <$> rotatePoints m camLoc camRot where
     pers (Coord x' y' z')

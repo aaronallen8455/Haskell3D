@@ -4,7 +4,7 @@ import Lib
 import Control.Monad (guard)
 
 -- | create a circle with given radius and subdivision
-circle :: GU -> Int -> Maybe Mesh
+circle :: GU -> Int -> Maybe (Mesh Point)
 circle radius sub
   | radius <= 0 = Nothing
   | sub <= 2 = Nothing
@@ -30,7 +30,7 @@ circlePoints radius sub
 
 -- | Constructs a sphere given a radius,
 -- radial subdivisions, and vertical subdivisions.
-sphere :: GU -> Int -> Int -> Maybe Mesh
+sphere :: GU -> Int -> Int -> Maybe (Mesh Point)
 sphere radius radialSubs verticalSubs
   | radius <= 0 = Nothing
   | radialSubs < 3 = Nothing
