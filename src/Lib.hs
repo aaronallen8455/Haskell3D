@@ -7,6 +7,7 @@
 module Lib
     ( Coord (..)
     , GU
+    , CU
     , Radian
     , Rotation
     , CCoord
@@ -14,6 +15,7 @@ module Lib
     , Vect
     , Mesh (..)
     , meshFromEdges
+    , projectedMeshToLines
     , Camera (..)
     , perspectiveTransform
     , translateCam
@@ -38,6 +40,8 @@ import Data.Array
 import qualified Data.IntMap as M
 import qualified Data.Set as S
 import qualified Data.IntSet as IS
+import GHC.Float
+import qualified Graphics.Gloss as Gloss (Point)
 
 -- global units
 type GU = Double
@@ -46,19 +50,17 @@ focalLength :: GU
 focalLength = 1
 
 -- canvas units
-type CU = Double
+type CU = Float
 
-displayWidth :: CU
-displayWidth = 700
-displayHeight :: CU
-displayHeight = 550
+gu2cu :: GU -> CU
+gu2cu = double2Float
 
 type Radian = Double
 
 data Coord a = Coord { x :: a, y :: a, z :: a } deriving (Eq, Ord, Functor, Show)
 
 -- 2d canvas coordinate
-data CCoord = CCoord { cx :: CU, cy :: CU }
+type CCoord = Gloss.Point
 
 type Point = Coord GU
 
@@ -88,6 +90,9 @@ meshFromEdges edges = Mesh items tree where
       | IS.member i' visited = (Leaf i' : acc, visited, S.insert (min i' i, max i' i) es)
       | otherwise = let (t, visited', es') = buildTree i' i visited es in (t:acc, visited', es')
 
+projectedMeshToLines :: Mesh (Maybe CCoord) -> [[CCoord]]
+projectedMeshToLines = undefined
+
 data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
 
 instance Functor Mesh where
@@ -111,12 +116,12 @@ perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Maybe 
 perspectiveTransform cam@Camera{..} = 
   fmap $ \m -> pers <$> rotatePoints m camLoc camRot where
     pers (Coord x' y' z')
-      | z' >= focalLength = Just $ CCoord bx by
+      | z' >= focalLength = Just $ (bx, by)
       | otherwise = Nothing
       where
         fz = focalLength / z'
-        bx = fz * x'
-        by = fz * y'
+        bx = gu2cu $ fz * x'
+        by = gu2cu $ fz * y'
 
 -- | Translate the camera along a unit vector.
 translateCam :: Camera -> Vect -> GU -> Camera
