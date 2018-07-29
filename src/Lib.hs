@@ -23,7 +23,7 @@ module Lib
     , translatePoints
     , rotateCam
     , rotateVect
-    , rotateVectRh
+    , rotateVectR
     , rotatePoint
     , rotatePoints
     , distance
@@ -55,7 +55,7 @@ focalLength = 1
 type CU = Float
 
 gu2cu :: GU -> CU
-gu2cu = (*10) . double2Float
+gu2cu = (*5) . double2Float
 
 type Radian = Double
 
@@ -169,15 +169,17 @@ rotateCam v cam = cam{ camRot = wrap <$> camRot cam <> v } where
 rotateVect :: Rotation -> Vect -> Vect
 rotateVect r = rotatePoint mempty r
 
-rotateVectRh :: Rotation -> Vect -> Vect
-rotateVectRh r = rotatePointRh mempty r
+-- | right hand version
+rotateVectR :: Rotation -> Vect -> Vect
+rotateVectR r = rotatePointR mempty r
 
 -- | Rotate a point around a pivot
 rotatePoint :: Point -> Rotation -> Point -> Point
 rotatePoint pivot r = head . rotatePoints pivot r . pure
 
-rotatePointRh :: Point -> Rotation -> Point -> Point
-rotatePointRh pivot r = head . rotatePointsRh pivot r . pure
+-- | right hand version
+rotatePointR :: Point -> Rotation -> Point -> Point
+rotatePointR pivot r = head . rotatePointsR pivot r . pure
 
 -- | Rotate some points around a pivot
 rotatePoints :: Functor f => Point -> Rotation -> f Point -> f Point
@@ -188,8 +190,9 @@ rotatePoints pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivo
     dy = sx * (cy * z' + sy * (sz * y' + cz * x')) + cx * (cz * y' - sz * x')
     dz = cx * (cy * z' + sy * (sz * y' + cz * x')) - sx * (cz * y' - sz * x')
 
-rotatePointsRh :: Functor f => Point -> Rotation -> f Point -> f Point
-rotatePointsRh pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivot) where
+-- | Right hand version
+rotatePointsR :: Functor f => Point -> Rotation -> f Point -> f Point
+rotatePointsR pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivot) where
   [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
   rotate (Coord x' y' z') = Coord dx dy dz where
     dx = x' * cz * cy + y' * (sz * cx + cz * sy * sx) + z' * (sz * sx - cz * sy * cx)
@@ -203,7 +206,7 @@ normalizeVector v = let m = distance (Coord 0 0 0) v in (fmap (/ m) v, m)
 
 scalePoints :: Functor f => Point -> Double -> f Point -> f Point
 scalePoints c scale = fmap f where
-  f pt= translatePoint nv (d * scale) pt where
+  f pt = translatePoint nv (d * scale) pt where
     (nv, d) = normalizeVector $ pt <> fmap negate c
 
 -- | Find the distance between two points.

@@ -65,7 +65,7 @@ update time world@World{..}
     totalRot = mconcat [pl, pr, pu, pd, rl, rr]
     cam@(Camera _ rot') = rotateCam totalRot camera
     totalTrans = mconcat [l, r, f, b, u, d]
-    vect = rotateVectRh (fmap negate rot') . fst $ normalizeVector totalTrans
+    vect = rotateVectR (fmap negate rot') . fst $ normalizeVector totalTrans
     cam' = translateCam vect transStep cam
 
 main :: IO ()
@@ -75,7 +75,7 @@ main = do
   display = InWindow "3d" (windowWidth, windowHeight) (200, 200)
   backColor = white
   fps = 60
-  world = World [sph, translatePoints (Coord 1 0 0) 5 sph] (Camera (Coord 0 0 (-10)) (Coord 0 0 0)) S.empty Nothing
+  world = World [sph, translatePoints (Coord 1 0 0) 5 sph, translatePoints (Coord 0 (-1) 0) 5 sph] (Camera (Coord 0 0 (-10)) (Coord 0 0 0)) S.empty Nothing
 
 uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
                        ,(Coord 0 0 1, 1, [0,2,5])
