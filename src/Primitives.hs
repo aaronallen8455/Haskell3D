@@ -47,7 +47,7 @@ sphere radius radialSubs verticalSubs
     bottom = (Coord 0 0 0, 0, [1..radialSubs])
     angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
     radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
-    step = 2 * radius / fromIntegral verticalSubs
+    step = 2 * radius / fromIntegral (verticalSubs + 1)
     heights = take verticalSubs [step, step * 2..] :: [GU]
     -- make edges for an inner circle point
     makeEdge (i, p) = (p, i, [above, below, left, right]) where
@@ -58,4 +58,20 @@ sphere radius radialSubs verticalSubs
            | otherwise = i - 1
       right | mo == 0 = i + 1 - radialSubs
             | otherwise = i + 1
-    
+
+spherePoints :: GU -> Int -> Int -> Maybe [Point]
+spherePoints radius radialSubs verticalSubs
+  | radius <= 0 = Nothing
+  | radialSubs < 3 = Nothing
+  | verticalSubs < 1 = Nothing
+  | otherwise = do
+    circles <- mapM (flip circlePoints radialSubs) radii
+    let translated = zipWith (\c -> translatePoints c (Coord 0 1 0)) circles heights
+    return $ top : bottom : concat translated
+  where
+    top = (Coord 0 (2 * radius) 0)
+    bottom = (Coord 0 0 0)
+    angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
+    radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
+    step = 2 * radius / fromIntegral (verticalSubs + 1)
+    heights = take verticalSubs [step, step * 2..] :: [GU]

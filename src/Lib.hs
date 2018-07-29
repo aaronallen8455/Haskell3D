@@ -12,7 +12,7 @@ module Lib
     , CCoord
     , Point
     , Vect
-    , Mesh
+    , Mesh (..)
     , meshFromEdges
     , Camera (..)
     , perspectiveTransform
@@ -72,35 +72,23 @@ data VertTree a = Vertex a [VertTree a] | Leaf a deriving (Functor, Foldable, Sh
 -- | builds a mesh from a list of bi-directional edges
 meshFromEdges :: [(Point, Int, [Int])] -> Mesh Point
 meshFromEdges edges = Mesh items tree where
-  bounds = (0, length edges)
+  bounds = (0, length edges - 1)
   items = array bounds [ (k, v) | (v, k, _) <- edges ]
   keyMap = array bounds [ (k, ks) | (_, k, ks) <- edges ]
   (tree, _, _) = buildTree 0 (-1) IS.empty S.empty
-  --tree' = (items !) <$> tree
   -- | Constructs a vertex tree where every branch is unique
   buildTree :: Int -> Int -> IS.IntSet -> S.Set (Int, Int) -> (VertTree Int, IS.IntSet, S.Set (Int, Int))
-  buildTree i p visited es
-    | i == p = error "index and parent are equal"
-    | IS.member i visited = (Leaf i, visited', es')
-    -- | Just False <- M.lookup i m = (Leaf i, M.adjust not i m)
-    | otherwise = (Vertex i ts, visited'', es'')
-    where
-      visited' = IS.insert i visited
-      es' = S.insert (min i p, max i p) es
-      children = filter (/= p) $ keyMap ! i
-      -- m' = M.insert i False m
-      (ts, visited'', es'') = foldr f ([], visited', es') children
-      --m''' | any isLeaf ts = M.adjust not i m'' -- if any children are leaves, seal this node
-      --     | otherwise = m''
-      f i' k@(acc, visited, es)
-        | S.member (min i' i, max i' i) es = k
-        | IS.member i' visited = (Leaf i' : acc, visited, S.insert (min i' i, max i' i) es)
-        -- | Just True <- M.lookup i m = (acc, m) -- a leaf already exists btwn these two
-        | otherwise = let (t, visited', es') = buildTree i' i visited es in (t:acc, visited', es')
-      --isLeaf (Vertex _ _) = False
-      --isLeaf (Leaf _) = True
+  buildTree i p visited es = (Vertex i ts, visited'', es'') where
+    visited' = IS.insert i visited
+    es' = S.insert (min i p, max i p) es
+    children = filter (/= p) $ keyMap ! i
+    (ts, visited'', es'') = foldr f ([], visited', es') children
+    f i' k@(acc, visited, es)
+      | S.member (min i' i, max i' i) es = k
+      | IS.member i' visited = (Leaf i' : acc, visited, S.insert (min i' i, max i' i) es)
+      | otherwise = let (t, visited', es') = buildTree i' i visited es in (t:acc, visited', es')
 
-data Mesh a = Mesh (Array Int a) (VertTree Int)
+data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
 
 instance Functor Mesh where
   fmap f (Mesh a t) = Mesh (fmap f a) t
@@ -136,7 +124,7 @@ translateCam cam uv d = cam{camLoc = translatePoint (camLoc cam) uv d}
 
 -- | Translate a point along a unit vector
 translatePoint :: Point -> Vect -> GU -> Point
-translatePoint p uv d = head $ translatePoints [p] uv d
+translatePoint p uv d = p <> fmap (*d) uv
 
 -- | Translates multiple points along a unit vector
 translatePoints :: Functor f => f Point -> Vect -> GU -> f Point

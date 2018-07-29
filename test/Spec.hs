@@ -18,21 +18,24 @@ main = hspec $ do
     it "should have the correct number of vertices" $ do
       length c `shouldBe` 6
   describe "Unit Cube" $ do
-    let uc = meshFromEdges [
-                            (Point 0 0 0, 0, [1,3,4])
-                           ,(Point 0 0 1, 1, [0,2,5])
-                           ,(Point 1 0 1, 2, [1,3,6])
-                           ,(Point 1 0 0, 3, [0,2,7])
-                           ,(Point 0 1 0, 4, [5,7,0])
-                           ,(Point 0 1 1, 5, [4,6,1])
-                           ,(Point 1 1 1, 6, [5,7,2])
-                           ,(Point 1 1 0, 7, [6,4,3])]
+    let uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
+                           ,(Coord 0 0 1, 1, [0,2,5])
+                           ,(Coord 1 0 1, 2, [1,3,6])
+                           ,(Coord 1 0 0, 3, [0,2,7])
+                           ,(Coord 0 1 0, 4, [5,7,0])
+                           ,(Coord 0 1 1, 5, [4,6,1])
+                           ,(Coord 1 1 1, 6, [5,7,2])
+                           ,(Coord 1 1 0, 7, [6,4,3])]
+        (Mesh v t) = uc
     it "should have the correct number of vertices" $ do
       length uc `shouldBe` 8
-  --describe "Sphere" $ do
-  --  let (Just s) = sphere 2 4 2
-  --  trace (show s) return ()
-  --  it "should have the correct number of vertices" $ do
-  --    length s `shouldBe` 10
-    --it "should be centered correctly" $ do
-    --  fmap ((*100) . (/100)) (getCenter s) `shouldBe` Coord 0 1 0
+    it "should find the center" $ do
+      getCenter uc `shouldBe` Coord 0.5 0.5 0.5
+  describe "Sphere" $ do
+    let (Just s) = sphere 1 6 4
+        (Mesh v t) = s
+    trace (show t) return ()
+    it "should have the correct number of vertices" $ do
+      length s `shouldBe` 26
+    it "should be centered correctly" $ do
+      getCenter s `shouldBe` Coord 0 1 0
