@@ -26,7 +26,7 @@ circlePoints radius sub
   where
     angle = 2 * pi / fromIntegral sub
     rotate :: Radian -> Point
-    rotate r = rotateVect (Coord 1 0 0) (Coord 0 r 0)
+    rotate r = rotateVect (Coord 0 r 0) (Coord 1 0 0)
 
 -- | Constructs a sphere given a radius,
 -- radial subdivisions, and vertical subdivisions.
@@ -37,7 +37,7 @@ sphere radius radialSubs verticalSubs
   | verticalSubs < 1 = Nothing
   | otherwise = do
     circles <- mapM (flip circlePoints radialSubs) radii
-    let translated = zipWith (\c -> translatePoints c (Coord 0 1 0)) circles heights
+    let translated = zipWith (translatePoints (Coord 0 1 0)) heights circles
         indexed = zip [1..] $ concat translated
         edges = map makeEdge indexed
     return . meshFromEdges $ bottom : top : edges
@@ -47,8 +47,8 @@ sphere radius radialSubs verticalSubs
     bottom = (Coord 0 0 0, 0, [1..radialSubs])
     angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
     radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
-    step = 2 * radius / fromIntegral (verticalSubs + 1)
-    heights = take verticalSubs [step, step * 2..] :: [GU]
+    -- step = 2 * radius / fromIntegral (verticalSubs + 1)
+    heights = map ((+radius) . (*radius) . negate . cos) $ take verticalSubs [angle, angle * 2..] :: [GU]
     -- make edges for an inner circle point
     makeEdge (i, p) = (p, i, [above, below, left, right]) where
       above = min (vsrs + 1) $ i + radialSubs
@@ -58,20 +58,3 @@ sphere radius radialSubs verticalSubs
            | otherwise = i - 1
       right | mo == 0 = i + 1 - radialSubs
             | otherwise = i + 1
-
-spherePoints :: GU -> Int -> Int -> Maybe [Point]
-spherePoints radius radialSubs verticalSubs
-  | radius <= 0 = Nothing
-  | radialSubs < 3 = Nothing
-  | verticalSubs < 1 = Nothing
-  | otherwise = do
-    circles <- mapM (flip circlePoints radialSubs) radii
-    let translated = zipWith (\c -> translatePoints c (Coord 0 1 0)) circles heights
-    return $ top : bottom : concat translated
-  where
-    top = (Coord 0 (2 * radius) 0)
-    bottom = (Coord 0 0 0)
-    angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
-    radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
-    step = 2 * radius / fromIntegral (verticalSubs + 1)
-    heights = take verticalSubs [step, step * 2..] :: [GU]

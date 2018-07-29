@@ -42,6 +42,7 @@ import qualified Data.Set as S
 import qualified Data.IntSet as IS
 import GHC.Float
 import qualified Graphics.Gloss as Gloss (Point, Path)
+import Debug.Trace
 
 -- global units
 type GU = Double
@@ -53,7 +54,7 @@ focalLength = 1
 type CU = Float
 
 gu2cu :: GU -> CU
-gu2cu = (*30) . double2Float
+gu2cu = (*10) . double2Float
 
 type Radian = Double
 
@@ -134,9 +135,9 @@ instance Num a => Monoid (Coord a) where
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
 perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Maybe CCoord))
-perspectiveTransform cam@Camera{..} = 
-  fmap $ \m -> pers <$> rotatePoints m camLoc camRot where
-    pers (Coord x' y' z')
+perspectiveTransform cam@Camera{..} = -- need to only call rotatePoints once
+  fmap $ fmap pers . rotatePoints mempty camRot . translatePoints (fmap negate camLoc) 1 where
+    pers p@(Coord x' y' z')
       | z' >= focalLength = Just $ (bx, by)
       | otherwise = Nothing
       where
@@ -145,34 +146,34 @@ perspectiveTransform cam@Camera{..} =
         by = gu2cu $ fz * y'
 
 -- | Translate the camera along a unit vector.
-translateCam :: Camera -> Vect -> GU -> Camera
-translateCam cam uv d = cam{camLoc = translatePoint (camLoc cam) uv d}
+translateCam :: Vect -> GU -> Camera -> Camera
+translateCam uv d cam = cam{camLoc = translatePoint uv d (camLoc cam)}
 
 -- | Translate a point along a unit vector
-translatePoint :: Point -> Vect -> GU -> Point
-translatePoint p uv d = p <> fmap (*d) uv
+translatePoint :: Vect -> GU -> Point -> Point
+translatePoint uv d = mappend (fmap (*d) uv)
 
 -- | Translates multiple points along a unit vector
-translatePoints :: Functor f => f Point -> Vect -> GU -> f Point
-translatePoints m uv d = fmap (\p -> translatePoint p uv d) m
+translatePoints :: Functor f => Vect -> GU -> f Point -> f Point
+translatePoints uv d = fmap $ translatePoint uv d
 
 -- | Add a rotation vector to the camera's current rotation.
-rotateCam :: Camera -> Rotation -> Camera
-rotateCam cam v = cam{ camRot = wrap <$> camRot cam <> v } where
+rotateCam :: Rotation -> Camera -> Camera
+rotateCam v cam = cam{ camRot = wrap <$> camRot cam <> v } where
   wrap r | r < negate pi = pi - mod' (negate r) pi
          | r > pi = negate pi + mod' r pi
 
 -- | Rotate a vector
-rotateVect :: Vect -> Rotation -> Vect
-rotateVect v r = rotatePoint v mempty r
+rotateVect :: Rotation -> Vect -> Vect
+rotateVect r = rotatePoint mempty r
 
 -- | Rotate a point around a pivot
-rotatePoint :: Point -> Point -> Rotation -> Point
-rotatePoint target pivot r = head $ rotatePoints [target] pivot r
+rotatePoint :: Point -> Rotation -> Point -> Point
+rotatePoint pivot r = head . rotatePoints pivot r . pure
 
 -- | Rotate some points around a pivot
-rotatePoints :: Functor f => f Point -> Point -> Rotation -> f Point
-rotatePoints pts pivot r = mappend pivot . rotate . mappend (fmap negate pivot) <$> pts where
+rotatePoints :: Functor f => Point -> Rotation -> f Point -> f Point
+rotatePoints pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivot) where
   [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
   rotate (Coord x' y' z') = Coord dx dy dz where
     dx = cy * (sz * y' + cz * x') - sy * z'
@@ -183,9 +184,9 @@ rotatePoints pts pivot r = mappend pivot . rotate . mappend (fmap negate pivot) 
 normalizeVector :: Vect -> (Vect, GU)
 normalizeVector v = let m = distance (Coord 0 0 0) v in (fmap (/ m) v, m)
 
-scalePoints :: Functor f => f Point -> Point -> Double -> f Point
-scalePoints pts c scale = fmap f pts where
-  f pt = translatePoint pt nv (d * scale) where
+scalePoints :: Functor f => Point -> Double -> f Point -> f Point
+scalePoints c scale = fmap f where
+  f pt= translatePoint nv (d * scale) pt where
     (nv, d) = normalizeVector $ pt <> fmap negate c
 
 -- | Find the distance between two points.
