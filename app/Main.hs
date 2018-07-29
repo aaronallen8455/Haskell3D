@@ -16,23 +16,31 @@ windowHeight    = 600
 data World = World 
   { meshes :: [Mesh Point]
   , camera :: Camera
+  , keys :: S.Set Key
+  , picture :: Maybe Picture
   }
 
 draw :: World -> Picture
-draw world@World{..} = scale gameSize gameSize . Pictures $ map drawMesh (perspectiveTransform camera meshes) 
+draw = fromJust . picture 
 
 drawMesh :: Mesh (Maybe CCoord) -> Picture
 drawMesh = pictures . map line . projectedMeshToLines
 
-handle = undefined
+handle :: Event -> World -> World
+handle _ = id
 
-update = undefined
+update :: Float -> World -> World
+update time world@World{..}
+  | isJust picture = world
+  | otherwise = world{ picture = Just pic }
+  where
+    pic = scale gameSize gameSize . Pictures $ map drawMesh (perspectiveTransform camera meshes)
 
 main :: IO ()
 main = do
   play display backColor fps world draw handle update
  where
   display = InWindow "3d" (windowWidth, windowHeight) (200, 200)
-  backColor = blue
+  backColor = white
   fps = 60
-  world = World [fromJust $ sphere 1 6 4] $ Camera (Coord 0 0 (-5)) (Coord 0 0 0)
+  world = World [fromJust $ sphere 1 6 4] (Camera (Coord 0 0 (-5)) (Coord 0 0 0)) S.empty Nothing

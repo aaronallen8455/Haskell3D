@@ -31,9 +31,9 @@ module Lib
     , getCenter
     ) where
 
-import Control.Monad (guard)
+import Control.Monad (guard, foldM)
 import Data.Semigroup ((<>))
-import Data.Maybe (catMaybes)
+import Data.Maybe (catMaybes, isNothing, isJust)
 import Data.Fixed (mod')
 import Data.Foldable
 import Data.Array
@@ -41,7 +41,7 @@ import qualified Data.IntMap as M
 import qualified Data.Set as S
 import qualified Data.IntSet as IS
 import GHC.Float
-import qualified Graphics.Gloss as Gloss (Point)
+import qualified Graphics.Gloss as Gloss (Point, Path)
 
 -- global units
 type GU = Double
@@ -53,7 +53,7 @@ focalLength = 1
 type CU = Float
 
 gu2cu :: GU -> CU
-gu2cu = double2Float
+gu2cu = (*30) . double2Float
 
 type Radian = Double
 
@@ -87,11 +87,32 @@ meshFromEdges edges = Mesh items tree where
     (ts, visited'', es'') = foldr f ([], visited', es') children
     f i' k@(acc, visited, es)
       | S.member (min i' i, max i' i) es = k
-      | IS.member i' visited = (Leaf i' : acc, visited, S.insert (min i' i, max i' i) es)
-      | otherwise = let (t, visited', es') = buildTree i' i visited es in (t:acc, visited', es')
+      | IS.member i' visited = 
+        (Leaf i' : acc, visited, S.insert (min i' i, max i' i) es)
+      | otherwise = let (t, visited', es') = buildTree i' i visited es 
+                    in (t:acc, visited', es')
 
-projectedMeshToLines :: Mesh (Maybe CCoord) -> [[CCoord]]
-projectedMeshToLines = undefined
+-- | Transform a mesh of CCoords into a list of Paths to be drawn by Gloss
+projectedMeshToLines :: Mesh (Maybe CCoord) -> [Gloss.Path]
+projectedMeshToLines (Mesh v t) = go Nothing t where
+  go :: Maybe Int -> VertTree Int -> [Gloss.Path]
+  go Nothing (Vertex i cs) = concatMap (go (Just i)) cs
+  go (Just p) (Vertex i cs)
+    | (Just a) <- vp, (Just b) <- vi =
+      [a, b] : concatMap (go (Just i)) cs
+    | isJust vi = concatMap (go (Just i)) cs
+    | otherwise = concatMap (go Nothing) cs
+    where
+      vp = v ! p
+      vi = v ! i
+  go Nothing (Leaf _) = []
+  go (Just p) (Leaf i)
+    | (Just a) <- vp, (Just b) <- vi = [[a, b]]
+    | otherwise = []
+    where
+      vp = v ! p
+      vi = v ! i
+
 
 data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
 
