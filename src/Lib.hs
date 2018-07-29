@@ -23,6 +23,7 @@ module Lib
     , translatePoints
     , rotateCam
     , rotateVect
+    , rotateVectRh
     , rotatePoint
     , rotatePoints
     , distance
@@ -162,14 +163,21 @@ rotateCam :: Rotation -> Camera -> Camera
 rotateCam v cam = cam{ camRot = wrap <$> camRot cam <> v } where
   wrap r | r < negate pi = pi - mod' (negate r) pi
          | r > pi = negate pi + mod' r pi
+         | otherwise = r
 
 -- | Rotate a vector
 rotateVect :: Rotation -> Vect -> Vect
 rotateVect r = rotatePoint mempty r
 
+rotateVectRh :: Rotation -> Vect -> Vect
+rotateVectRh r = rotatePointRh mempty r
+
 -- | Rotate a point around a pivot
 rotatePoint :: Point -> Rotation -> Point -> Point
 rotatePoint pivot r = head . rotatePoints pivot r . pure
+
+rotatePointRh :: Point -> Rotation -> Point -> Point
+rotatePointRh pivot r = head . rotatePointsRh pivot r . pure
 
 -- | Rotate some points around a pivot
 rotatePoints :: Functor f => Point -> Rotation -> f Point -> f Point
@@ -177,11 +185,20 @@ rotatePoints pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivo
   [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
   rotate (Coord x' y' z') = Coord dx dy dz where
     dx = cy * (sz * y' + cz * x') - sy * z'
-    dy = sz * (cy * z' + sy * (sz * y' + cz * x')) + cx * (cz * y' - sz * x')
+    dy = sx * (cy * z' + sy * (sz * y' + cz * x')) + cx * (cz * y' - sz * x')
     dz = cx * (cy * z' + sy * (sz * y' + cz * x')) - sx * (cz * y' - sz * x')
+
+rotatePointsRh :: Functor f => Point -> Rotation -> f Point -> f Point
+rotatePointsRh pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivot) where
+  [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
+  rotate (Coord x' y' z') = Coord dx dy dz where
+    dx = x' * cz * cy + y' * (sz * cx + cz * sy * sx) + z' * (sz * sx - cz * sy * cx)
+    dy = -x' * sz * cy + y' * (cz * cx - sz * sy * sx) + z' * (cz * sx + sz * sy * cx)
+    dz = x' * sy - y' * cy * sx + z' * cy * cx
 
 -- | Normalize a vector and also get the magnitude of the original vector
 normalizeVector :: Vect -> (Vect, GU)
+normalizeVector (Coord 0 0 0) = (Coord 0 0 0, 0)
 normalizeVector v = let m = distance (Coord 0 0 0) v in (fmap (/ m) v, m)
 
 scalePoints :: Functor f => Point -> Double -> f Point -> f Point
