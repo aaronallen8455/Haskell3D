@@ -1,6 +1,7 @@
 {-# language RecordWildCards #-}
 {-# language DeriveFunctor #-}
 {-# language DeriveFoldable #-}
+{-# language DeriveGeneric #-}
 
 -- https://jsfiddle.net/gwbse86v/17/
 
@@ -44,6 +45,8 @@ import qualified Data.IntSet as IS
 import GHC.Float
 import qualified Graphics.Gloss as Gloss (Point, Path)
 import Debug.Trace
+import Control.Parallel.Strategies
+import GHC.Generics
 
 -- global units
 type GU = Double
@@ -59,7 +62,7 @@ gu2cu = (*5) . double2Float
 
 type Radian = Double
 
-data Coord a = Coord { x :: a, y :: a, z :: a } deriving (Eq, Ord, Functor, Show)
+data Coord a = Coord { x :: a, y :: a, z :: a } deriving (Generic, Eq, Ord, Functor, Show)
 
 -- 2d canvas coordinate
 type CCoord = Gloss.Point
@@ -122,6 +125,8 @@ instance Functor Mesh where
   fmap f (Mesh a t) = Mesh (fmap f a) t
 instance Foldable Mesh where
   foldr f z (Mesh a t) = foldr f z a
+instance Traversable Mesh where
+  traverse f (Mesh a t) = flip Mesh t <$> (traverse f a)
 
 data Camera = Camera { camLoc :: Point, camRot :: Rotation }
 
@@ -131,13 +136,24 @@ instance Num a => Semigroup (Coord a) where
 instance Num a => Monoid (Coord a) where
   mempty = Coord 0 0 0
   mappend = (<>)
+instance Applicative Coord where
+  pure x = Coord x x x
+  (Coord fx fy fz) <*> (Coord x y z) = Coord (fx x) (fy y) (fz z)
+instance Num a => Num (Coord a) where
+  (+) = (<>)
+  a * b = (*) <$> a <*> b
+  abs = fmap abs
+  signum = fmap signum
+  fromInteger x = fmap fromInteger $ Coord x x x
+  negate = fmap negate
+instance NFData a => NFData (Coord a)
   
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
 perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Maybe CCoord))
-perspectiveTransform cam@Camera{..} = -- need to only call rotatePoints once
-  fmap $ fmap pers . rotatePoints mempty camRot . translatePoints (fmap negate camLoc) 1 where
+perspectiveTransform cam@Camera{..} =
+  fmap (fmap pers) . rotateMeshes mempty camRot . fmap (translatePoints (negate camLoc) 1) where
     pers p@(Coord x' y' z')
       | z' >= focalLength = Just $ (bx, by)
       | otherwise = Nothing
@@ -182,8 +198,11 @@ rotatePointR :: Point -> Rotation -> Point -> Point
 rotatePointR pivot r = head . rotatePointsR pivot r . pure
 
 -- | Rotate some points around a pivot
-rotatePoints :: Functor f => Point -> Rotation -> f Point -> f Point
-rotatePoints pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivot) where
+rotatePoints :: (Functor f, Traversable f) => Point -> Rotation -> f Point -> f Point
+rotatePoints pivot r = head . rotateMeshes pivot r . pure
+
+rotateMeshes :: (Functor f, Functor g, Traversable g) => Point -> Rotation -> f (g Point) -> f (g Point)
+rotateMeshes pivot r = fmap (withStrategy (parTraversable rdeepseq) . fmap (mappend pivot . rotate . subtract pivot)) where
   [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
   rotate (Coord x' y' z') = Coord dx dy dz where
     dx = cy * (sz * y' + cz * x') - sy * z'
@@ -192,7 +211,7 @@ rotatePoints pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivo
 
 -- | Right hand version
 rotatePointsR :: Functor f => Point -> Rotation -> f Point -> f Point
-rotatePointsR pivot r = fmap $ mappend pivot . rotate . mappend (fmap negate pivot) where
+rotatePointsR pivot r = fmap $ mappend pivot . rotate . subtract pivot where
   [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
   rotate (Coord x' y' z') = Coord dx dy dz where
     dx = x' * cz * cy + y' * (sz * cx + cz * sy * sx) + z' * (sz * sx - cz * sy * cx)
@@ -207,7 +226,7 @@ normalizeVector v = let m = distance (Coord 0 0 0) v in (fmap (/ m) v, m)
 scalePoints :: Functor f => Point -> Double -> f Point -> f Point
 scalePoints c scale = fmap f where
   f pt = translatePoint nv (d * scale) pt where
-    (nv, d) = normalizeVector $ pt <> fmap negate c
+    (nv, d) = normalizeVector $ pt - c
 
 -- | Find the distance between two points.
 distance :: Point -> Point -> GU

@@ -47,7 +47,6 @@ sphere radius radialSubs verticalSubs
     bottom = (Coord 0 0 0, 0, [1..radialSubs])
     angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
     radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
-    -- step = 2 * radius / fromIntegral (verticalSubs + 1)
     heights = map ((+radius) . (*radius) . negate . cos) $ take verticalSubs [angle, angle * 2..] :: [GU]
     -- make edges for an inner circle point
     makeEdge (i, p) = (p, i, [above, below, left, right]) where

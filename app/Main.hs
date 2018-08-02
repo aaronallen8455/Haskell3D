@@ -65,12 +65,11 @@ update time world@World{..}
     totalRot = mconcat [pl, pr, pu, pd, rl, rr]
     cam@(Camera _ rot') = rotateCam totalRot camera
     totalTrans = mconcat [l, r, f, b, u, d]
-    vect = rotateVectR (fmap negate rot') . fst $ normalizeVector totalTrans
+    vect = rotateVectR (negate rot') . fst $ normalizeVector totalTrans
     cam' = translateCam vect transStep cam
 
 main :: IO ()
-main = do
-  play display backColor fps world draw handle update
+main = play display backColor fps world draw handle update
  where
   display = InWindow "3d" (windowWidth, windowHeight) (200, 200)
   backColor = white
@@ -78,13 +77,13 @@ main = do
   world = World [sph, translatePoints (Coord 1 0 0) 5 sph, translatePoints (Coord 0 (-1) 0) 5 sph] (Camera (Coord 0 0 (-10)) (Coord 0 0 0)) S.empty Nothing
 
 uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
-                       ,(Coord 0 0 1, 1, [0,2,5])
-                       ,(Coord 1 0 1, 2, [1,3,6])
-                       ,(Coord 1 0 0, 3, [0,2,7])
-                       ,(Coord 0 1 0, 4, [5,7,0])
-                       ,(Coord 0 1 1, 5, [4,6,1])
-                       ,(Coord 1 1 1, 6, [5,7,2])
-                       ,(Coord 1 1 0, 7, [6,4,3])]
+                   ,(Coord 0 0 1, 1, [0,2,5])
+                   ,(Coord 1 0 1, 2, [1,3,6])
+                   ,(Coord 1 0 0, 3, [0,2,7])
+                   ,(Coord 0 1 0, 4, [5,7,0])
+                   ,(Coord 0 1 1, 5, [4,6,1])
+                   ,(Coord 1 1 1, 6, [5,7,2])
+                   ,(Coord 1 1 0, 7, [6,4,3])]
 (Just circ) = circle 1 6
 
-(Just sph) = sphere 1 20 18
+(Just sph) = sphere 1 30 28
