@@ -68,12 +68,12 @@ torus innerRad outerRad radialSubs circleSubs
   | otherwise = do
     edges <- map makeEdge . zip [0..] . concat 
            . zipWith ($) rotate . map (translate . flipUp)
-           <$> replicateM radialSubs (circlePoints innerRad circleSubs)
+           <$> replicateM radialSubs (circlePoints ((outerRad - innerRad) / 2) circleSubs)
     return $ meshFromEdges edges
   where
     rotations = [0, 2 * pi / fromIntegral radialSubs..] :: [Radian]
     rotate = map (\r -> rotatePoints mempty (Coord 0 r 0)) rotations
-    circleCenter = outerRad - innerRad / 2
+    circleCenter = innerRad + (outerRad - innerRad) / 2
     translate = translatePoints (Coord 1 0 0) circleCenter
     flipUp = rotatePoints mempty (Coord (pi/2) 0 0)
     numPoints = radialSubs * circleSubs

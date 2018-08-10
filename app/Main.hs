@@ -10,7 +10,6 @@ import qualified Data.Set as S
 import Data.Maybe
 import Debug.Trace
 
-gameSize        = 300
 windowWidth     = 1200
 windowHeight    = 900
 
@@ -25,12 +24,6 @@ draw :: World -> Picture
 draw World{..}
   | (Just pic) <- picture = pic
   | otherwise = renderMeshes camera meshes
-
-drawMesh :: Mesh (Point, Maybe CCoord) -> Picture
-drawMesh = pictures . map line . projectedMeshToLines
-
-renderMeshes :: Camera -> [Mesh Point] -> Picture
-renderMeshes cam meshes = Color blue . scale gameSize gameSize . Pictures $ map drawMesh (perspectiveTransform cam meshes)
 
 handle :: Event -> World -> World
 handle (EventKey k s _ _) world@World{..} = world{ picture = pic, keys = keys' } where
@@ -79,10 +72,10 @@ main = play display backColor fps world draw handle update
   world = World [
     scalePoints (Coord 0 0.5 0) 2 sph, 
     translatePoints (Coord 0 1 0) 5 sph, 
-    translatePoints (Coord 0 0 1) 5 sph, 
-    translatePoints (Coord 0 0 2) 5 sph, 
-    translatePoints (Coord 1 0 0) 5 sph,
-    translatePoints (Coord 0 1 0) 15 tor,
+    --translatePoints (Coord 0 0 1) 5 sph, 
+    --translatePoints (Coord 0 0 2) 5 sph, 
+    --translatePoints (Coord 1 0 0) 5 sph,
+    --translatePoints (Coord 0 1 0) 15 tor,
     translatePoints (Coord 0 (-1) 0) 5 sph]
     (Camera (Coord 0 0 0) (Coord 0 0 0)) 
     S.empty 
@@ -98,6 +91,6 @@ uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
                    ,(Coord 1 1 0, 7, [6,4,3])]
 (Just circ) = circle 1 6
 
-(Just sph) = sphere 1 15 13
+(Just sph) = sphere 1 30 28
 
-(Just tor) = torus 0.75 5 14 14
+(Just tor) = torus 1.5 5 14 14

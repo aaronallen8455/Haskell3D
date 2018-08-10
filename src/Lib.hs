@@ -3,33 +3,7 @@
 {-# language DeriveFoldable #-}
 {-# language DeriveGeneric #-}
 
-module Lib
-    ( Coord (..)
-    , GU
-    , CU
-    , Radian
-    , Rotation
-    , CCoord
-    , Point
-    , Vect
-    , Mesh (..)
-    , meshFromEdges
-    , projectedMeshToLines
-    , Camera (..)
-    , perspectiveTransform
-    , translateCam
-    , translatePoint
-    , translatePoints
-    , rotateCam
-    , rotateVect
-    , rotateVectR
-    , rotatePoint
-    , rotatePoints
-    , distance
-    , scalePoints
-    , normalizeVector
-    , getCenter
-    ) where
+module Lib where
 
 import Control.Monad (guard, foldM)
 import Data.Semigroup ((<>))
@@ -41,7 +15,7 @@ import qualified Data.IntMap as M
 import qualified Data.Set as S
 import qualified Data.IntSet as IS
 import GHC.Float
-import qualified Graphics.Gloss as Gloss (Point, Path)
+import qualified Graphics.Gloss as Gloss
 import Debug.Trace
 import Control.Parallel.Strategies
 import GHC.Generics
@@ -52,9 +26,12 @@ type GU = Double
 focalLength :: GU
 focalLength = 1
 
+gameSize = 300 -- scales the gloss picture
+
 -- canvas units
 type CU = Float
 
+-- | Convert global units to canvas units
 gu2cu :: GU -> CU
 gu2cu = (*5) . double2Float
 
@@ -100,7 +77,7 @@ meshFromEdges edges = Mesh items tree where
 -- if drawing a line from a point behind the camera to one in front, find where
 -- the line crosses the xy plane
 projectedMeshToLines :: Mesh (Point, Maybe CCoord) -> [Gloss.Path]
-projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
+projectedMeshToLines (Mesh v (Vertex i cs)) = withStrategy (parTraversable rdeepseq) $ concatMap (go $ v ! i) cs where
   go :: (Point, Maybe CCoord) -> VertTree Int -> [Gloss.Path]
   go (c, Just cCoord) (Vertex i cs)
     | Just pCoord <- mbCoord = [cCoord, pCoord] : concatMap (go p) cs
@@ -118,13 +95,13 @@ projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
     | Just pCoord <- mbCoord = [[intersect, pCoord]]
     | otherwise = []
     where
-      p@(pc, mbCoord) = v ! i
+      (pc, mbCoord) = v ! i
       intersect = findIntersection pc c
   go (c, Just cCoord) (Leaf i)
     | Just pCoord <- mbCoord = [[cCoord, pCoord]]
     | otherwise = [[cCoord, intersect]]
     where
-      p@(pc, mbCoord) = v ! i
+      (pc, mbCoord) = v ! i
       intersect = findIntersection pc c
 
   findIntercept (ax, ay) (bx, by) = gu2cu $ by - (by - ay) / (bx - ax) * bx
@@ -132,6 +109,16 @@ projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
     iy = findIntercept (bz - focalLength, by) (az - focalLength, ay)
     ix = findIntercept (bz - focalLength, bx) (az - focalLength, ax)
 
+
+-- withStrategy (parTraversable rdeepseq)
+renderMeshes :: Camera -> [Mesh Point] -> Gloss.Picture
+renderMeshes cam meshes = 
+  Gloss.Color Gloss.blue 
+  . Gloss.scale gameSize gameSize 
+  . Gloss.Pictures 
+  . map (Gloss.pictures . map Gloss.line) 
+  . withStrategy (parTraversable rdeepseq) 
+  $ map projectedMeshToLines (perspectiveTransform cam meshes)
 
 data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
 
@@ -165,9 +152,9 @@ instance NFData a => NFData (Coord a)
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
-perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Point, Maybe CCoord))
+perspectiveTransform :: (Functor f, Traversable f) => Camera -> f (Mesh Point) -> f (Mesh (Point, Maybe CCoord))
 perspectiveTransform cam@Camera{..} =
-  fmap (fmap pers) . rotateMeshes mempty camRot . fmap (translatePoints (negate camLoc) 1) where
+  fmap (withStrategy (parTraversable rdeepseq) . fmap pers) . rotateMeshes mempty camRot . fmap (translatePoints (negate camLoc) 1) where
     pers p@(Coord x' y' z')
       | z' >= focalLength = (p, Just (bx, by))
       | otherwise = (p, Nothing)
@@ -216,7 +203,7 @@ rotatePoints :: (Functor f, Traversable f) => Point -> Rotation -> f Point -> f 
 rotatePoints pivot r = head . rotateMeshes pivot r . pure
 
 rotateMeshes :: (Functor f, Functor g, Traversable g) => Point -> Rotation -> f (g Point) -> f (g Point)
-rotateMeshes pivot r = fmap (withStrategy (parTraversable rdeepseq) . fmap (mappend pivot . rotate . subtract pivot)) where
+rotateMeshes pivot r = fmap (fmap (mappend pivot . rotate . subtract pivot)) where
   [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
   rotate (Coord x' y' z') = Coord dx dy dz where
     dx = cy * (sz * y' + cz * x') - sy * z'
