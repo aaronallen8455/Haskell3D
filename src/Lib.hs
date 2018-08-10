@@ -3,8 +3,6 @@
 {-# language DeriveFoldable #-}
 {-# language DeriveGeneric #-}
 
--- https://jsfiddle.net/gwbse86v/17/
-
 module Lib
     ( Coord (..)
     , GU
@@ -62,7 +60,7 @@ gu2cu = (*5) . double2Float
 
 type Radian = Double
 
-data Coord a = Coord { x :: a, y :: a, z :: a } deriving (Generic, Eq, Ord, Functor, Show)
+data Coord a = Coord { x :: !a, y :: !a, z :: !a } deriving (Generic, Eq, Ord, Functor, Show)
 
 -- 2d canvas coordinate
 type CCoord = Gloss.Point
@@ -97,26 +95,42 @@ meshFromEdges edges = Mesh items tree where
       | otherwise = let (t, visited', es') = buildTree i' i visited es 
                     in (t:acc, visited', es')
 
--- | Transform a mesh of CCoords into a list of Paths to be drawn by Gloss
-projectedMeshToLines :: Mesh (Maybe CCoord) -> [Gloss.Path]
-projectedMeshToLines (Mesh v t) = go Nothing t where
-  go :: Maybe Int -> VertTree Int -> [Gloss.Path]
-  go Nothing (Vertex i cs) = concatMap (go (Just i)) cs
-  go (Just p) (Vertex i cs)
-    | (Just a) <- vp, (Just b) <- vi =
-      [a, b] : concatMap (go (Just i)) cs
-    | isJust vi = concatMap (go (Just i)) cs
-    | otherwise = concatMap (go Nothing) cs
+-- | Transform a mesh into a list of Paths to be drawn by Gloss
+-- The CCoord is Nothing if the point is behind the camera.
+-- if drawing a line from a point behind the camera to one in front, find where
+-- the line crosses the xy plane
+projectedMeshToLines :: Mesh (Point, Maybe CCoord) -> [Gloss.Path]
+projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
+  go :: (Point, Maybe CCoord) -> VertTree Int -> [Gloss.Path]
+  go (c, Just cCoord) (Vertex i cs)
+    | Just pCoord <- mbCoord = [cCoord, pCoord] : concatMap (go p) cs
+    | otherwise = [cCoord, intersect] : concatMap (go p) cs
     where
-      vp = v ! p
-      vi = v ! i
-  go Nothing (Leaf _) = []
-  go (Just p) (Leaf i)
-    | (Just a) <- vp, (Just b) <- vi = [[a, b]]
+      p@(pc, mbCoord) = v ! i
+      intersect = findIntersection pc c
+  go (c, Nothing) (Vertex i cs)
+    | Just pCoord <- mbCoord = [intersect, pCoord] : concatMap (go p) cs
+    | otherwise = concatMap (go p) cs
+    where
+      p@(pc, mbCoord) = v ! i
+      intersect = findIntersection pc c
+  go (c, Nothing) (Leaf i)
+    | Just pCoord <- mbCoord = [[intersect, pCoord]]
     | otherwise = []
     where
-      vp = v ! p
-      vi = v ! i
+      p@(pc, mbCoord) = v ! i
+      intersect = findIntersection pc c
+  go (c, Just cCoord) (Leaf i)
+    | Just pCoord <- mbCoord = [[cCoord, pCoord]]
+    | otherwise = [[cCoord, intersect]]
+    where
+      p@(pc, mbCoord) = v ! i
+      intersect = findIntersection pc c
+
+  findIntercept (ax, ay) (bx, by) = gu2cu $ by - (by - ay) / (bx - ax) * bx
+  findIntersection (Coord ax ay az) (Coord bx by bz) = (ix, iy) where
+    iy = findIntercept (bz - focalLength, by) (az - focalLength, ay)
+    ix = findIntercept (bz - focalLength, bx) (az - focalLength, ax)
 
 
 data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
@@ -151,12 +165,12 @@ instance NFData a => NFData (Coord a)
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
-perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Maybe CCoord))
+perspectiveTransform :: Functor f => Camera -> f (Mesh Point) -> f (Mesh (Point, Maybe CCoord))
 perspectiveTransform cam@Camera{..} =
   fmap (fmap pers) . rotateMeshes mempty camRot . fmap (translatePoints (negate camLoc) 1) where
     pers p@(Coord x' y' z')
-      | z' >= focalLength = Just $ (bx, by)
-      | otherwise = Nothing
+      | z' >= focalLength = (p, Just (bx, by))
+      | otherwise = (p, Nothing)
       where
         fz = focalLength / z'
         bx = gu2cu $ fz * x'

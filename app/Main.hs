@@ -26,7 +26,7 @@ draw World{..}
   | (Just pic) <- picture = pic
   | otherwise = renderMeshes camera meshes
 
-drawMesh :: Mesh (Maybe CCoord) -> Picture
+drawMesh :: Mesh (Point, Maybe CCoord) -> Picture
 drawMesh = pictures . map line . projectedMeshToLines
 
 renderMeshes :: Camera -> [Mesh Point] -> Picture
@@ -62,7 +62,8 @@ update time world@World{..}
     pu = if S.member (SpecialKey KeyUp) keys then Coord (-rotStep) 0 0 else mempty
     rl = if S.member (Char 'w') keys then Coord 0 0 rotStep else mempty
     rr = if S.member (Char 'r') keys then Coord 0 0 (-rotStep) else mempty
-    totalRot = mconcat [pl, pr, pu, pd, rl, rr]
+    zRot = rl <> rr--(rl <> rr) <> rotateVect rot (rl <> rr)
+    totalRot = mconcat [pl, pr, pu, pd, zRot]
     cam@(Camera _ rot') = rotateCam totalRot camera
     totalTrans = mconcat [l, r, f, b, u, d]
     vect = rotateVectR (negate rot') . fst $ normalizeVector totalTrans
@@ -74,7 +75,7 @@ main = play display backColor fps world draw handle update
   display = InWindow "3d" (windowWidth, windowHeight) (200, 200)
   backColor = white
   fps = 60
-  world = World [sph, translatePoints (Coord 1 0 0) 5 sph, translatePoints (Coord 0 (-1) 0) 5 sph] (Camera (Coord 0 0 (-10)) (Coord 0 0 0)) S.empty Nothing
+  world = World [sph, translatePoints (Coord 1 0 0) 5 sph, translatePoints (Coord 0 (-1) 0) 5 sph] (Camera (Coord 0 0 0) (Coord 0 0 0)) S.empty Nothing
 
 uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
                    ,(Coord 0 0 1, 1, [0,2,5])
@@ -86,4 +87,4 @@ uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
                    ,(Coord 1 1 0, 7, [6,4,3])]
 (Just circ) = circle 1 6
 
-(Just sph) = sphere 1 30 28
+(Just sph) = sphere 1 15 13
