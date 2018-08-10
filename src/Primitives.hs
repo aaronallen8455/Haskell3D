@@ -1,7 +1,7 @@
 module Primitives where
 
 import Lib
-import Control.Monad (guard)
+import Control.Monad (guard, replicateM)
 
 -- | create a circle with given radius and subdivision
 circle :: GU -> Int -> Maybe (Mesh Point)
@@ -49,6 +49,7 @@ sphere radius radialSubs verticalSubs
     radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
     heights = map ((+radius) . (*radius) . negate . cos) $ take verticalSubs [angle, angle * 2..] :: [GU]
     -- make edges for an inner circle point
+    makeEdge :: (Int, Point) -> (Point, Int, [Int])
     makeEdge (i, p) = (p, i, [above, below, left, right]) where
       above = min (vsrs + 1) $ i + radialSubs
       below = max 0 $ i - radialSubs
@@ -57,3 +58,41 @@ sphere radius radialSubs verticalSubs
            | otherwise = i - 1
       right | mo == 0 = i + 1 - radialSubs
             | otherwise = i + 1
+
+-- | Construct a torus with given inner radius, outer radius, radial subdivisions,
+-- and circle subdivisions.
+torus :: GU -> GU -> Int -> Int -> Maybe (Mesh Point)
+torus innerRad outerRad radialSubs circleSubs
+  | any id (map (<0) [innerRad, outerRad]) = Nothing
+  | any id (map (<3) [radialSubs, circleSubs]) = Nothing
+  | otherwise = do
+    edges <- map makeEdge . zip [0..] . concat 
+           . zipWith ($) rotate . map (translate . flipUp)
+           <$> replicateM radialSubs (circlePoints innerRad circleSubs)
+    return $ meshFromEdges edges
+  where
+    rotations = [0, 2 * pi / fromIntegral radialSubs..] :: [Radian]
+    rotate = map (\r -> rotatePoints mempty (Coord 0 r 0)) rotations
+    circleCenter = outerRad - innerRad / 2
+    translate = translatePoints (Coord 1 0 0) circleCenter
+    flipUp = rotatePoints mempty (Coord (pi/2) 0 0)
+    numPoints = radialSubs * circleSubs
+    makeEdge :: (Int, Point) -> (Point, Int, [Int])
+    makeEdge (i, p) = (p, i, edges) where
+      up = mod (i + circleSubs) numPoints
+      down = mod (i - circleSubs) numPoints
+      (q, r) = quotRem i circleSubs
+      left = circleSubs * q + mod (r - 1) circleSubs
+      right = circleSubs * q + mod (r + 1) circleSubs
+      edges = [up, down, left, right]
+
+
+--linePoints
+
+--plane :: GU -> GU -> Int -> Int -> Maybe (Mesh Point)
+--plane width depth wDiv lDiv
+--  | width <= 0 = Nothing
+--  | depth <= 0 = Nothing
+--  | wDiv < 0 = Nothing
+--  | lDiv < 0 = Nothing
+--  | otherwise =

@@ -40,13 +40,13 @@ handle (EventKey k s _ _) world@World{..} = world{ picture = pic, keys = keys' }
       | otherwise = Nothing
 handle _ x = x
 
-transStep = 0.3
-rotStep = pi / 300
+transStep = 0.3 :: GU
+rotStep = pi / 300 :: Radian
 
 update :: Float -> World -> World
 update time world@World{..}
-  | isJust picture = world
-  | otherwise = world{ camera = cam' }
+  | S.null keys && isJust picture = world
+  | otherwise = world{ camera = cam', picture = Just pic }
   where
     (Camera loc rot) = camera
     -- do camera transformations
@@ -68,6 +68,7 @@ update time world@World{..}
     totalTrans = mconcat [l, r, f, b, u, d]
     vect = rotateVectR (negate rot') . fst $ normalizeVector totalTrans
     cam' = translateCam vect transStep cam
+    pic = renderMeshes cam' meshes
 
 main :: IO ()
 main = play display backColor fps world draw handle update
@@ -75,7 +76,17 @@ main = play display backColor fps world draw handle update
   display = InWindow "3d" (windowWidth, windowHeight) (200, 200)
   backColor = white
   fps = 60
-  world = World [sph, translatePoints (Coord 1 0 0) 5 sph, translatePoints (Coord 0 (-1) 0) 5 sph] (Camera (Coord 0 0 0) (Coord 0 0 0)) S.empty Nothing
+  world = World [
+    scalePoints (Coord 0 0.5 0) 2 sph, 
+    translatePoints (Coord 0 1 0) 5 sph, 
+    translatePoints (Coord 0 0 1) 5 sph, 
+    translatePoints (Coord 0 0 2) 5 sph, 
+    translatePoints (Coord 1 0 0) 5 sph,
+    translatePoints (Coord 0 1 0) 15 tor,
+    translatePoints (Coord 0 (-1) 0) 5 sph]
+    (Camera (Coord 0 0 0) (Coord 0 0 0)) 
+    S.empty 
+    Nothing
 
 uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
                    ,(Coord 0 0 1, 1, [0,2,5])
@@ -88,3 +99,5 @@ uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
 (Just circ) = circle 1 6
 
 (Just sph) = sphere 1 15 13
+
+(Just tor) = torus 0.75 5 14 14
