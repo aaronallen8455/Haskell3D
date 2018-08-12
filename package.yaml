@@ -25,6 +25,8 @@ dependencies:
 - array
 - gloss
 - parallel ==3.2.*
+- matrix
+- vector
 
 library:
   source-dirs: src

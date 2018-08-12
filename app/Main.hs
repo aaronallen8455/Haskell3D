@@ -9,6 +9,7 @@ import Graphics.Gloss.Interface.Pure.Game hiding (Point, circle)
 import qualified Data.Set as S
 import Data.Maybe
 import Debug.Trace
+import Data.Matrix
 
 windowWidth     = 1200
 windowHeight    = 900
@@ -59,7 +60,7 @@ update time world@World{..}
     totalRot = mconcat [pl, pr, pu, pd, zRot]
     cam@(Camera _ rot') = rotateCam totalRot camera
     totalTrans = mconcat [l, r, f, b, u, d]
-    vect = rotateVectR (negate rot') . fst $ normalizeVector totalTrans
+    vect = fst $ normalizeVector totalTrans
     cam' = translateCam vect transStep cam
     pic = renderMeshes cam' meshes
 
@@ -77,7 +78,7 @@ main = play display backColor fps world draw handle update
     --translatePoints (Coord 1 0 0) 5 sph,
     --translatePoints (Coord 0 1 0) 15 tor,
     translatePoints (Coord 0 (-1) 0) 5 sph]
-    (Camera (Coord 0 0 0) (Coord 0 0 0)) 
+    (Camera (identity 4) (identity 4)) 
     S.empty 
     Nothing
 

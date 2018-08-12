@@ -9,11 +9,13 @@ import Control.Monad (guard, foldM)
 import Data.Semigroup ((<>))
 import Data.Maybe (catMaybes, isNothing, isJust)
 import Data.Fixed (mod')
-import Data.Foldable
+import Data.Foldable hiding (toList)
 import Data.Array
+import Data.Matrix hiding ((!))
 import qualified Data.IntMap as M
 import qualified Data.Set as S
 import qualified Data.IntSet as IS
+import qualified Data.Vector as V
 import GHC.Float
 import qualified Graphics.Gloss as Gloss
 import Debug.Trace
@@ -129,7 +131,11 @@ instance Foldable Mesh where
 instance Traversable Mesh where
   traverse f (Mesh a t) = flip Mesh t <$> (traverse f a)
 
-data Camera = Camera { camLoc :: Point, camRot :: Rotation }
+type TrMatrix = Matrix GU
+type RMatrix = Matrix GU
+type TMatrix = Matrix GU
+
+data Camera = Camera { camTranslation :: TMatrix, camTransformation :: TrMatrix }
 
 -- vectors are monoids
 instance Num a => Semigroup (Coord a) where
@@ -148,13 +154,17 @@ instance Num a => Num (Coord a) where
   fromInteger x = fmap fromInteger $ Coord x x x
   negate = fmap negate
 instance NFData a => NFData (Coord a)
+
+applyMatrix :: Matrix GU -> Point -> Point
+applyMatrix m (Coord x y z) = Coord x' y' z' where
+  [x', y', z'] = take 3 . toList $ m * fromLists [[x, y, z, 1]]
   
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
 perspectiveTransform :: (Functor f, Traversable f) => Camera -> f (Mesh Point) -> f (Mesh (Point, Maybe CCoord))
 perspectiveTransform cam@Camera{..} =
-  fmap (withStrategy (parTraversable rdeepseq) . fmap pers) . rotateMeshes mempty camRot . fmap (translatePoints (negate camLoc) 1) where
+  fmap $ withStrategy (parTraversable rdeepseq) . fmap (pers . applyMatrix camTransformation) where
     pers p@(Coord x' y' z')
       | z' >= focalLength = (p, Just (bx, by))
       | otherwise = (p, Nothing)
@@ -165,7 +175,21 @@ perspectiveTransform cam@Camera{..} =
 
 -- | Translate the camera along a unit vector.
 translateCam :: Vect -> GU -> Camera -> Camera
-translateCam uv d cam = cam{camLoc = translatePoint uv d (camLoc cam)}
+translateCam dir d cam@Camera{..} = Camera newT newTR where
+  [right, up, out] = [V.take 3 $ getRow x camTransformation | x <- [1..3]]
+  (Coord ux uy uz) = fmap (*(-d)) dir
+  right' = fmap (*ux) right
+  up' = fmap (*uy) up
+  out' = fmap (*uz) out
+  all = V.fromList [sum $ map (V.! i) [right', up', out'] | i <- [0..2]]
+  newT = mapCol colF 4 camTranslation
+  colF 4 _ = 1
+  colF ri v = v + all V.! (ri-1)
+  rM = mapCol rcf 4 camTransformation
+  rcf 4 _ = 1
+  rcf _ _ = 0
+  newTR = rM * newT
+
 
 -- | Translate a point along a unit vector
 translatePoint :: Vect -> GU -> Point -> Point
@@ -175,12 +199,43 @@ translatePoint uv d = mappend (fmap (*d) uv)
 translatePoints :: Functor f => Vect -> GU -> f Point -> f Point
 translatePoints uv d = fmap $ translatePoint uv d
 
+xRotMatrix :: Radian -> RMatrix
+xRotMatrix a = fromLists [
+                           [1, 0 , 0  , 0],
+                           [0, ca, -sa, 0],
+                           [0, sa, ca , 0],
+                           [0, 0 , 0  , 1]
+                         ] where
+                          ca = cos a
+                          sa = sin a
+yRotMatrix :: Radian -> RMatrix
+yRotMatrix a = fromLists [
+                           [ca , 0, sa, 0],
+                           [0  , 1, ca, 0],
+                           [-sa, 0, ca, 0],
+                           [0  , 0, 0 , 1]
+                         ] where
+                          sa = sin a
+                          ca = cos a
+zRotMatrix :: Radian -> RMatrix
+zRotMatrix a = fromLists [
+                           [ca, -sa, 0, 0],
+                           [sa, ca , 0, 0],
+                           [0 , 0  , 1, 0],
+                           [0 , 0  , 0, 1]
+                         ] where
+                          ca = cos a
+                          sa = sin a
+
+-- change order?
+getRotationMatrix :: Rotation -> RMatrix
+getRotationMatrix (Coord rx ry rz) = product . map (uncurry ($)) . filter ((/= 0) . snd) $
+  [(xRotMatrix, rx), (yRotMatrix, ry), (zRotMatrix, rz)]
+
 -- | Add a rotation vector to the camera's current rotation.
 rotateCam :: Rotation -> Camera -> Camera
-rotateCam v cam = cam{ camRot = wrap <$> camRot cam <> v } where
-  wrap r | r < negate pi = pi - mod' (negate r) pi
-         | r > pi = negate pi + mod' r pi
-         | otherwise = r
+rotateCam v cam@Camera{..} = cam{camTransformation = newTr} where
+  newTr = getRotationMatrix v * camTransformation
 
 -- | Rotate a vector
 rotateVect :: Rotation -> Vect -> Vect
