@@ -50,10 +50,10 @@ update time world@World{..}
     b = if S.member (Char 'd') keys then Coord 0 0 (-1) else mempty
     u = if S.member (Char 'z') keys then Coord 0 1 0 else mempty
     d = if S.member (Char 'v') keys then Coord 0 (-1) 0 else mempty
-    pr = if S.member (SpecialKey KeyRight) keys then Coord 0 rotStep 0 else mempty
-    pl = if S.member (SpecialKey KeyLeft) keys then Coord 0 (-rotStep) 0 else mempty
-    pd = if S.member (SpecialKey KeyDown) keys then Coord rotStep 0 0 else mempty
-    pu = if S.member (SpecialKey KeyUp) keys then Coord (-rotStep) 0 0 else mempty
+    pr = if S.member (SpecialKey KeyRight) keys then Coord 0 (-rotStep) 0 else mempty
+    pl = if S.member (SpecialKey KeyLeft) keys then Coord 0 rotStep 0 else mempty
+    pd = if S.member (SpecialKey KeyDown) keys then Coord (-rotStep) 0 0 else mempty
+    pu = if S.member (SpecialKey KeyUp) keys then Coord rotStep 0 0 else mempty
     rl = if S.member (Char 'w') keys then Coord 0 0 rotStep else mempty
     rr = if S.member (Char 'r') keys then Coord 0 0 (-rotStep) else mempty
     zRot = rl <> rr--(rl <> rr) <> rotateVect rot (rl <> rr)

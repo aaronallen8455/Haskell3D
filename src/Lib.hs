@@ -2,6 +2,7 @@
 {-# language DeriveFunctor #-}
 {-# language DeriveFoldable #-}
 {-# language DeriveGeneric #-}
+{-# language MultiWayIf #-}
 
 module Lib where
 
@@ -11,7 +12,7 @@ import Data.Maybe (catMaybes, isNothing, isJust)
 import Data.Fixed (mod')
 import Data.Foldable hiding (toList)
 import Data.Array
-import Data.Matrix hiding ((!))
+import Data.Matrix hiding ((!), trace)
 import qualified Data.IntMap as M
 import qualified Data.Set as S
 import qualified Data.IntSet as IS
@@ -157,7 +158,7 @@ instance NFData a => NFData (Coord a)
 
 applyMatrix :: Matrix GU -> Point -> Point
 applyMatrix m (Coord x y z) = Coord x' y' z' where
-  [x', y', z'] = take 3 . toList $ m * fromLists [[x, y, z, 1]]
+  [x', y', z'] = take 3 . toList $ m * fromLists [[x], [y], [z], [1]]
   
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
@@ -211,7 +212,7 @@ xRotMatrix a = fromLists [
 yRotMatrix :: Radian -> RMatrix
 yRotMatrix a = fromLists [
                            [ca , 0, sa, 0],
-                           [0  , 1, ca, 0],
+                           [0  , 1, 0 , 0],
                            [-sa, 0, ca, 0],
                            [0  , 0, 0 , 1]
                          ] where
@@ -229,13 +230,15 @@ zRotMatrix a = fromLists [
 
 -- change order?
 getRotationMatrix :: Rotation -> RMatrix
-getRotationMatrix (Coord rx ry rz) = product . map (uncurry ($)) . filter ((/= 0) . snd) $
+getRotationMatrix (Coord rx ry rz) = foldl1 (*) . map (uncurry ($)) . filter ((/= 0) . snd) $
   [(xRotMatrix, rx), (yRotMatrix, ry), (zRotMatrix, rz)]
 
 -- | Add a rotation vector to the camera's current rotation.
 rotateCam :: Rotation -> Camera -> Camera
 rotateCam v cam@Camera{..} = cam{camTransformation = newTr} where
-  newTr = getRotationMatrix v * camTransformation
+  newTr | v /= mempty = rotM * camTransformation
+        | otherwise = camTransformation
+  rotM = getRotationMatrix v
 
 -- | Rotate a vector
 rotateVect :: Rotation -> Vect -> Vect
