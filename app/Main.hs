@@ -10,7 +10,7 @@ import qualified Data.Set as S
 import qualified Data.Vector as V
 import Data.Maybe
 import Debug.Trace
-import Data.Matrix
+import Data.Matrix hiding (trace)
 
 windowWidth     = 1200
 windowHeight    = 900

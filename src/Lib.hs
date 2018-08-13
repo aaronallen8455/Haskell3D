@@ -44,6 +44,7 @@ type Coord = Matrix Double
 
 coord :: Double -> Double -> Double -> Coord
 coord x y z = fromLists [[x], [y], [z], [1]]
+ncoord x y z = fromLists [[x], [x], [x], [0]]
 getX = getElem 1 1
 getY = getElem 2 1
 getZ = getElem 3 1
@@ -178,7 +179,7 @@ translateCam dir d cam@Camera{..} = Camera newT newTR where
 
 -- | Translate a point along a unit vector
 translatePoint :: Vect -> GU -> Point -> Point
-translatePoint uv d = (+) (fmap (*d) uv)
+translatePoint uv d = unsafeSet 1 (4, 1) . (+) (fmap (*d) uv)
 
 -- | Translates multiple points along a unit vector
 translatePoints :: Functor f => Vect -> GU -> f Point -> f Point
