@@ -53,6 +53,21 @@ type Vect = Point
 
 type Rotation = Coord
 
+data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
+
+instance Functor Mesh where
+  fmap f (Mesh a t) = Mesh (fmap f a) t
+instance Foldable Mesh where
+  foldr f z (Mesh a t) = foldr f z a
+instance Traversable Mesh where
+  traverse f (Mesh a t) = flip Mesh t <$> (traverse f a)
+
+type TrMatrix = Matrix GU
+type RMatrix = Matrix GU
+type TMatrix = Matrix GU
+
+data Camera = Camera { camTranslation :: TMatrix, camTransformation :: TrMatrix }
+
 -- | A tree of connected verticies, doesn't contain cycles
 data VertTree a = Vertex a [VertTree a] | Leaf a deriving (Functor, Foldable, Show)
 
@@ -121,31 +136,17 @@ renderMeshes cam =
   . map projectedMeshToLines 
   . perspectiveTransform cam
 
-data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
-
-instance Functor Mesh where
-  fmap f (Mesh a t) = Mesh (fmap f a) t
-instance Foldable Mesh where
-  foldr f z (Mesh a t) = foldr f z a
-instance Traversable Mesh where
-  traverse f (Mesh a t) = flip Mesh t <$> (traverse f a)
-
-type TrMatrix = Matrix GU
-type RMatrix = Matrix GU
-type TMatrix = Matrix GU
-
-data Camera = Camera { camTranslation :: TMatrix, camTransformation :: TrMatrix }
-
--- vectors are monoids
+-- Add two vectors
 (<+>) :: Coord -> Coord -> Coord
 a <+> b = V.unsafeUpd (V.zipWith (+) a b) [(3, 1)]
 
+-- Subtract two vectors
 (<->) :: Coord -> Coord -> Coord
 a <-> b = V.unsafeUpd (V.zipWith (-) a b) [(3, 1)]
 
 applyMatrix :: Matrix GU -> Point -> Point
 applyMatrix m pt = pt' where
-  pt' = getCol 1 $ m * colVector pt
+  pt' = getCol 1 $ m `multStd2` colVector pt
   
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
@@ -217,7 +218,7 @@ zRotMatrix a = fromLists [
 
 -- change order?
 getRotationMatrix :: Rotation -> RMatrix
-getRotationMatrix r = foldl (*) (identity 4) . map (uncurry ($)) . filter ((/= 0) . snd) $
+getRotationMatrix r = foldl (multStd2) (identity 4) . map (uncurry ($)) . filter ((/= 0) . snd) $
   [(xRotMatrix, r V.! 0), (yRotMatrix, r V.! 1), (zRotMatrix, r V.! 2)]
 
 -- | Add a rotation vector to the camera's current rotation.
@@ -231,17 +232,9 @@ rotateCam v cam@Camera{..} = cam{camTransformation = newTr} where
 rotateVect :: Rotation -> Vect -> Vect
 rotateVect r = rotatePoint (coord 0 0 0) r
 
--- | right hand version
---rotateVectR :: Rotation -> Vect -> Vect
---rotateVectR r = rotatePointR mempty r
-
 -- | Rotate a point around a pivot
 rotatePoint :: Point -> Rotation -> Point -> Point
 rotatePoint pivot r = head . rotatePoints pivot r . pure
-
--- | right hand version
---rotatePointR :: Point -> Rotation -> Point -> Point
---rotatePointR pivot r = head . rotatePointsR pivot r . pure
 
 -- | Rotate some points around a pivot
 rotatePoints :: (Functor f, Traversable f) => Point -> Rotation -> f Point -> f Point
@@ -250,16 +243,7 @@ rotatePoints pivot r = head . rotateMeshes pivot r . pure
 rotateMeshes :: (Functor f, Functor g, Traversable g) => Point -> Rotation -> f (g Point) -> f (g Point)
 rotateMeshes pivot r = fmap (fmap ((<+>) pivot . rotate . (<->) pivot)) where
   rotation = getRotationMatrix r
-  rotate pt = getCol 1 $ rotation * colVector pt
-
--- | Right hand version
--- rotatePointsR :: Functor f => Point -> Rotation -> f Point -> f Point
--- rotatePointsR pivot r = fmap $ mappend pivot . rotate . subtract pivot where
---   [sx, sy, sz, cx, cy, cz] = [(t . f) r | t <- [sin, cos], f <- [x, y, z]]
---   rotate (Coord x' y' z') = Coord dx dy dz where
---     dx = x' * cz * cy + y' * (sz * cx + cz * sy * sx) + z' * (sz * sx - cz * sy * cx)
---     dy = -x' * sz * cy + y' * (cz * cx - sz * sy * sx) + z' * (cz * sx + sz * sy * cx)
---     dz = x' * sy - y' * cy * sx + z' * cy * cx
+  rotate pt = getCol 1 $ rotation `multStd2` colVector pt
 
 -- | Normalize a vector and also get the magnitude of the original vector
 normalizeVector :: Vect -> (Vect, GU)
