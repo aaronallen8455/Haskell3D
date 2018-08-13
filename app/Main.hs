@@ -45,22 +45,22 @@ update time world@World{..}
   where
     (Camera loc rot) = camera
     -- do camera transformations
-    empty = [0, 0, 0 ,1]
-    l = V.fromList $ if S.member (Char 's') keys then [(-1), 0, 0, 1] else empty
-    r = V.fromList $ if S.member (Char 'f') keys then [1, 0, 0, 1] else empty
-    f = V.fromList $ if S.member (Char 'e') keys then [0, 0, 1, 1] else empty
-    b = V.fromList $ if S.member (Char 'd') keys then [0, 0, (-1), 1] else empty
-    u = V.fromList $ if S.member (Char 'z') keys then [0, 1, 0, 1] else empty
-    d = V.fromList $ if S.member (Char 'v') keys then [0, (-1), 0, 1] else empty
-    pr = V.fromList $ if S.member (SpecialKey KeyRight) keys then [0, (-rotStep), 0, 1] else empty
-    pl = V.fromList $ if S.member (SpecialKey KeyLeft) keys then [0, rotStep, 0, 1] else empty
-    pd = V.fromList $ if S.member (SpecialKey KeyDown) keys then [(-rotStep), 0, 0, 1] else empty
-    pu = V.fromList $ if S.member (SpecialKey KeyUp) keys then [rotStep, 0, 0, 1] else empty
-    rl = V.fromList $ if S.member (Char 'w') keys then [0, 0, rotStep, 1] else empty
-    rr = V.fromList $ if S.member (Char 'r') keys then [0, 0, (-rotStep), 1] else empty
-    totalRot = foldr1 (<+>) [pl, pr, pu, pd, rl, rr]
+    empty = coord 0 0 0
+    l = if S.member (Char 's') keys then coord (-1) 0 0 else empty
+    r = if S.member (Char 'f') keys then coord 1 0 0 else empty
+    f = if S.member (Char 'e') keys then coord 0 0 1 else empty
+    b = if S.member (Char 'd') keys then coord 0 0 (-1) else empty
+    u = if S.member (Char 'z') keys then coord 0 1 0 else empty
+    d = if S.member (Char 'v') keys then coord 0 (-1) 0 else empty
+    pr = if S.member (SpecialKey KeyRight) keys then coord 0 (-rotStep) 0 else empty
+    pl = if S.member (SpecialKey KeyLeft) keys then coord 0 rotStep 0 else empty
+    pd = if S.member (SpecialKey KeyDown) keys then coord (-rotStep) 0 0 else empty
+    pu = if S.member (SpecialKey KeyUp) keys then coord rotStep 0 0 else empty
+    rl = if S.member (Char 'w') keys then coord 0 0 rotStep else empty
+    rr = if S.member (Char 'r') keys then coord 0 0 (-rotStep) else empty
+    totalRot = foldr1 (+) [pl, pr, pu, pd, rl, rr]
     cam@(Camera _ rot') = rotateCam totalRot camera
-    totalTrans = foldr1 (<+>) [l, r, f, b, u, d]
+    totalTrans = foldr1 (+) [l, r, f, b, u, d]
     vect = fst $ normalizeVector totalTrans
     cam' = translateCam vect transStep cam
     pic = renderMeshes cam' meshes

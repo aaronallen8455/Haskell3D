@@ -40,9 +40,13 @@ gu2cu = (*5) . double2Float
 type Radian = Double
 
 -- data Coord a = Coord { x :: a, y :: a, z :: a } deriving (Generic, Eq, Ord, Functor, Show)
-type Coord = V.Vector Double
+type Coord = Matrix Double
 
-coord x y z = V.fromList [x, y, z, 1]
+coord :: Double -> Double -> Double -> Coord
+coord x y z = fromLists [[x], [y], [z], [1]]
+getX = getElem 1 1
+getY = getElem 2 1
+getZ = getElem 3 1
 
 -- 2d canvas coordinate
 type CCoord = Gloss.Point
@@ -121,9 +125,10 @@ projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
       intersect = findIntersection pc c
 
   findIntercept (ax, ay) (bx, by) = gu2cu $ by - (by - ay) / (bx - ax) * bx
+  findIntersection :: Coord -> Coord -> (Float, Float)
   findIntersection a b = (ix, iy) where
-    iy = findIntercept (b V.! 2 - focalLength, b V.! 1) (a V.! 2 - focalLength, a V.! 1)
-    ix = findIntercept (b V.! 2 - focalLength, b V.! 0) (a V.! 2 - focalLength, a V.! 0)
+    iy = findIntercept (getZ b - focalLength, getY b) (getZ a - focalLength, getY a)
+    ix = findIntercept (getZ b - focalLength, getX b) (getZ a - focalLength, getX a)
 
 -- | Transforms a list of meshes into a Gloss Picture
 renderMeshes :: Camera -> [Mesh Point] -> Gloss.Picture
@@ -136,17 +141,8 @@ renderMeshes cam =
   . map projectedMeshToLines 
   . perspectiveTransform cam
 
--- Add two vectors
-(<+>) :: Coord -> Coord -> Coord
-a <+> b = V.unsafeUpd (V.zipWith (+) a b) [(3, 1)]
-
--- Subtract two vectors
-(<->) :: Coord -> Coord -> Coord
-a <-> b = V.unsafeUpd (V.zipWith (-) a b) [(3, 1)]
-
 applyMatrix :: Matrix GU -> Point -> Point
-applyMatrix m pt = pt' where
-  pt' = getCol 1 $ m `multStd2` colVector pt
+applyMatrix = multStd2
   
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
@@ -155,21 +151,21 @@ perspectiveTransform :: (Functor f, Traversable f) => Camera -> f (Mesh Point) -
 perspectiveTransform cam@Camera{..} =
   fmap $ withStrategy (parTraversable rdeepseq) . fmap (pers . applyMatrix camTransformation) where
     pers p
-      | p V.! 2 >= focalLength = (p, Just (bx, by))
+      | getZ p >= focalLength = (p, Just (bx, by))
       | otherwise = (p, Nothing)
       where
-        fz = focalLength / p V.! 2
-        bx = gu2cu $ fz * p V.! 0
-        by = gu2cu $ fz * p V.! 1
+        fz = focalLength / getZ p
+        bx = gu2cu $ fz * getX p
+        by = gu2cu $ fz * getY p
 
 -- | Translate the camera along a unit vector.
 translateCam :: Vect -> GU -> Camera -> Camera
 translateCam dir d cam@Camera{..} = Camera newT newTR where
   [right, up, out] = [V.take 3 $ getRow x camTransformation | x <- [1..3]]
   dir' = fmap (*(-d)) dir
-  right' = fmap (* dir' V.! 0) right
-  up' = fmap (* dir' V.! 1) up
-  out' = fmap (* dir' V.! 2) out
+  right' = fmap (* getX dir') right
+  up' = fmap (* getY dir') up
+  out' = fmap (* getZ dir') out
   all = V.fromList [sum $ map (V.! i) [right', up', out'] | i <- [0..2]]
   newT = mapCol colF 4 camTranslation
   colF 4 _ = 1
@@ -182,7 +178,7 @@ translateCam dir d cam@Camera{..} = Camera newT newTR where
 
 -- | Translate a point along a unit vector
 translatePoint :: Vect -> GU -> Point -> Point
-translatePoint uv d = (<+>) (fmap (*d) uv)
+translatePoint uv d = (+) (fmap (*d) uv)
 
 -- | Translates multiple points along a unit vector
 translatePoints :: Functor f => Vect -> GU -> f Point -> f Point
@@ -219,7 +215,7 @@ zRotMatrix a = fromLists [
 -- change order?
 getRotationMatrix :: Rotation -> RMatrix
 getRotationMatrix r = foldl (multStd2) (identity 4) . map (uncurry ($)) . filter ((/= 0) . snd) $
-  [(xRotMatrix, r V.! 0), (yRotMatrix, r V.! 1), (zRotMatrix, r V.! 2)]
+  [(xRotMatrix, getX r), (yRotMatrix, getY r), (zRotMatrix, getZ r)]
 
 -- | Add a rotation vector to the camera's current rotation.
 rotateCam :: Rotation -> Camera -> Camera
@@ -241,9 +237,9 @@ rotatePoints :: (Functor f, Traversable f) => Point -> Rotation -> f Point -> f 
 rotatePoints pivot r = head . rotateMeshes pivot r . pure
 
 rotateMeshes :: (Functor f, Functor g, Traversable g) => Point -> Rotation -> f (g Point) -> f (g Point)
-rotateMeshes pivot r = fmap (fmap ((<+>) pivot . rotate . (<->) pivot)) where
+rotateMeshes pivot r = fmap (fmap ((+) pivot . rotate . subtract pivot)) where
   rotation = getRotationMatrix r
-  rotate pt = getCol 1 $ rotation `multStd2` colVector pt
+  rotate pt = rotation `multStd2` pt
 
 -- | Normalize a vector and also get the magnitude of the original vector
 normalizeVector :: Vect -> (Vect, GU)
@@ -251,15 +247,15 @@ normalizeVector v
   | x == 0 && y == 0 && z == 0 = (v, 0)
   | otherwise = (coord (x / m) (y / m) (z / m), m)
   where
-    x = v V.! 0
-    y = v V.! 1
-    z = v V.! 2
+    x = getX v
+    y = getY v
+    z = getZ v
     m = distance (coord 0 0 0) v
 
 scalePoints :: Functor f => Point -> Double -> f Point -> f Point
 scalePoints c scale = fmap f where
   f pt = translatePoint nv (d * scale) pt where
-    (nv, d) = normalizeVector $ pt <-> c
+    (nv, d) = normalizeVector $ pt - c
 
 -- | Find the distance between two points.
 distance :: Point -> Point -> GU
@@ -269,8 +265,8 @@ distance a b
   | zDiff == 0 = sqrt $ xDiff ^ 2 + yDiff ^ 2
   | otherwise = sqrt $ yDiff ^ 2 + d ^ 2
   where
-    (x1:y1:z1:_) = V.toList a
-    (x2:y2:z2:_) = V.toList b
+    (x1:y1:z1:_) = toList a
+    (x2:y2:z2:_) = toList b
     yDiff = y1 - y2
     xDiff = x1 - x2
     zDiff = z1 - z2
@@ -278,5 +274,5 @@ distance a b
 
 getCenter :: (Foldable f, Functor f) => f Coord -> Coord
 getCenter cs = div' $ foldr f (coord 0 0 0, 0) cs where
-  f x (acc, s) = (acc <+> x, s + 1)
+  f x (acc, s) = (acc + x, s + 1)
   div' (p, t) = (/ t) <$> p -- fix /?
