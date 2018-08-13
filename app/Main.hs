@@ -56,8 +56,7 @@ update time world@World{..}
     pu = if S.member (SpecialKey KeyUp) keys then Coord rotStep 0 0 else mempty
     rl = if S.member (Char 'w') keys then Coord 0 0 rotStep else mempty
     rr = if S.member (Char 'r') keys then Coord 0 0 (-rotStep) else mempty
-    zRot = rl <> rr--(rl <> rr) <> rotateVect rot (rl <> rr)
-    totalRot = mconcat [pl, pr, pu, pd, zRot]
+    totalRot = mconcat [pl, pr, pu, pd, rl, rr]
     cam@(Camera _ rot') = rotateCam totalRot camera
     totalTrans = mconcat [l, r, f, b, u, d]
     vect = fst $ normalizeVector totalTrans
@@ -68,15 +67,15 @@ main :: IO ()
 main = play display backColor fps world draw handle update
  where
   display = InWindow "3d" (windowWidth, windowHeight) (200, 200)
-  backColor = white
+  backColor = dark . dark . dark $ dark blue
   fps = 60
   world = World [
     scalePoints (Coord 0 0.5 0) 2 sph, 
     translatePoints (Coord 0 1 0) 5 sph, 
-    --translatePoints (Coord 0 0 1) 5 sph, 
-    --translatePoints (Coord 0 0 2) 5 sph, 
-    --translatePoints (Coord 1 0 0) 5 sph,
-    --translatePoints (Coord 0 1 0) 15 tor,
+    translatePoints (Coord 0 0 1) 5 sph, 
+    translatePoints (Coord 0 0 2) 5 sph, 
+    translatePoints (Coord 1 0 0) 5 sph,
+    translatePoints (Coord 0 1 0) 15 tor,
     translatePoints (Coord 0 (-1) 0) 5 sph]
     (Camera (identity 4) (identity 4)) 
     S.empty 
@@ -92,6 +91,6 @@ uc = meshFromEdges [(Coord 0 0 0, 0, [1,3,4])
                    ,(Coord 1 1 0, 7, [6,4,3])]
 (Just circ) = circle 1 6
 
-(Just sph) = sphere 1 30 28
+(Just sph) = sphere 1 15 13
 
 (Just tor) = torus 1.5 5 14 14

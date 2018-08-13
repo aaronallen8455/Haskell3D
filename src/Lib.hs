@@ -80,31 +80,27 @@ meshFromEdges edges = Mesh items tree where
 -- if drawing a line from a point behind the camera to one in front, find where
 -- the line crosses the xy plane
 projectedMeshToLines :: Mesh (Point, Maybe CCoord) -> [Gloss.Path]
-projectedMeshToLines (Mesh v (Vertex i cs)) = withStrategy (parTraversable rdeepseq) $ concatMap (go $ v ! i) cs where
+projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
   go :: (Point, Maybe CCoord) -> VertTree Int -> [Gloss.Path]
-  go (c, Just cCoord) (Vertex i cs)
-    | Just pCoord <- mbCoord = [cCoord, pCoord] : concatMap (go p) cs
-    | otherwise = [cCoord, intersect] : concatMap (go p) cs
+  go (c, mbCCoord) (Vertex i cs) = case mbCCoord of
+    Just cCoord -> case mbCoord of
+      Just pCoord -> [cCoord, pCoord] : concatMap (go p) cs
+      _ -> [cCoord, intersect] : concatMap (go p) cs
+    _ -> case mbCoord of
+      Just pCoord -> [intersect, pCoord] : concatMap (go p) cs
+      _ ->concatMap (go p) cs
     where
       p@(pc, mbCoord) = v ! i
       intersect = findIntersection pc c
-  go (c, Nothing) (Vertex i cs)
-    | Just pCoord <- mbCoord = [intersect, pCoord] : concatMap (go p) cs
-    | otherwise = concatMap (go p) cs
+  go (c, mbCCoord) (Leaf i) = case mbCCoord of
+    Just cCoord -> case mbCoord of
+      Just pCoord -> [[cCoord, pCoord]]
+      _ -> [[cCoord, intersect]]
+    _ -> case mbCoord of
+      Just pCoord -> [[intersect, pCoord]]
+      _ -> []
     where
       p@(pc, mbCoord) = v ! i
-      intersect = findIntersection pc c
-  go (c, Nothing) (Leaf i)
-    | Just pCoord <- mbCoord = [[intersect, pCoord]]
-    | otherwise = []
-    where
-      (pc, mbCoord) = v ! i
-      intersect = findIntersection pc c
-  go (c, Just cCoord) (Leaf i)
-    | Just pCoord <- mbCoord = [[cCoord, pCoord]]
-    | otherwise = [[cCoord, intersect]]
-    where
-      (pc, mbCoord) = v ! i
       intersect = findIntersection pc c
 
   findIntercept (ax, ay) (bx, by) = gu2cu $ by - (by - ay) / (bx - ax) * bx
@@ -112,16 +108,16 @@ projectedMeshToLines (Mesh v (Vertex i cs)) = withStrategy (parTraversable rdeep
     iy = findIntercept (bz - focalLength, by) (az - focalLength, ay)
     ix = findIntercept (bz - focalLength, bx) (az - focalLength, ax)
 
-
--- withStrategy (parTraversable rdeepseq)
+-- | Transforms a list of meshes into a Gloss Picture
 renderMeshes :: Camera -> [Mesh Point] -> Gloss.Picture
-renderMeshes cam meshes = 
-  Gloss.Color Gloss.blue 
+renderMeshes cam = 
+  Gloss.Color Gloss.white
   . Gloss.scale gameSize gameSize 
-  . Gloss.Pictures 
+  . Gloss.pictures
   . map (Gloss.pictures . map Gloss.line) 
   . withStrategy (parTraversable rdeepseq) 
-  $ map projectedMeshToLines (perspectiveTransform cam meshes)
+  . map projectedMeshToLines 
+  . perspectiveTransform cam
 
 data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
 
