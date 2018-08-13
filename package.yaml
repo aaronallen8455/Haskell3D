@@ -40,6 +40,7 @@ executables:
     - -rtsopts
     - -with-rtsopts=-N4
     - -O2
+    - -fexcess-precision
     dependencies:
     - ThreeDee
 

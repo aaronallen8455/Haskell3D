@@ -26,7 +26,7 @@ circlePoints radius sub
   where
     angle = 2 * pi / fromIntegral sub
     rotate :: Radian -> Point
-    rotate r = rotateVect (Coord 0 r 0) (Coord 1 0 0)
+    rotate r = rotateVect (coord 0 r 0) (coord 1 0 0)
 
 -- | Constructs a sphere given a radius,
 -- radial subdivisions, and vertical subdivisions.
@@ -37,14 +37,14 @@ sphere radius radialSubs verticalSubs
   | verticalSubs < 1 = Nothing
   | otherwise = do
     circles <- mapM (flip circlePoints radialSubs) radii
-    let translated = zipWith (translatePoints (Coord 0 1 0)) heights circles
+    let translated = zipWith (translatePoints (coord 0 1 0)) heights circles
         indexed = zip [1..] $ concat translated
         edges = map makeEdge indexed
     return . meshFromEdges $ bottom : top : edges
   where
     vsrs = verticalSubs * radialSubs
-    top = (Coord 0 (2 * radius) 0, vsrs + 1, take radialSubs [vsrs,vsrs-1..])
-    bottom = (Coord 0 0 0, 0, [1..radialSubs])
+    top = (coord 0 (2 * radius) 0, vsrs + 1, take radialSubs [vsrs,vsrs-1..])
+    bottom = (coord 0 0 0, 0, [1..radialSubs])
     angle = 2 * pi / fromIntegral (verticalSubs * 2 + 2)
     radii = map ((*radius) . sin) $ take verticalSubs [angle, angle * 2..] :: [Radian]
     heights = map ((+radius) . (*radius) . negate . cos) $ take verticalSubs [angle, angle * 2..] :: [GU]
@@ -72,10 +72,10 @@ torus innerRad outerRad radialSubs circleSubs
     return $ meshFromEdges edges
   where
     rotations = [0, 2 * pi / fromIntegral radialSubs..] :: [Radian]
-    rotate = map (\r -> rotatePoints mempty (Coord 0 r 0)) rotations
+    rotate = map (\r -> rotatePoints (coord 0 0 0) (coord 0 r 0)) rotations
     circleCenter = innerRad + (outerRad - innerRad) / 2
-    translate = translatePoints (Coord 1 0 0) circleCenter
-    flipUp = rotatePoints mempty (Coord (pi/2) 0 0)
+    translate = translatePoints (coord 1 0 0) circleCenter
+    flipUp = rotatePoints (coord 0 0 0) (coord (pi/2) 0 0)
     numPoints = radialSubs * circleSubs
     makeEdge :: (Int, Point) -> (Point, Int, [Int])
     makeEdge (i, p) = (p, i, edges) where
