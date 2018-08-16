@@ -56,8 +56,8 @@ update time world@World{..}
     pl = if S.member (SpecialKey KeyLeft) keys then coord 0 rotStep 0 else empty
     pd = if S.member (SpecialKey KeyDown) keys then coord (-rotStep) 0 0 else empty
     pu = if S.member (SpecialKey KeyUp) keys then coord rotStep 0 0 else empty
-    rl = if S.member (Char 'w') keys then coord 0 0 rotStep else empty
-    rr = if S.member (Char 'r') keys then coord 0 0 (-rotStep) else empty
+    rl = if S.member (Char 'w') keys then coord 0 0 (-rotStep) else empty
+    rr = if S.member (Char 'r') keys then coord 0 0 rotStep else empty
     totalRot = foldr1 (+) [pl, pr, pu, pd, rl, rr]
     cam@(Camera _ rot') = rotateCam totalRot camera
     totalTrans = foldr1 (+) [l, r, f, b, u, d]
@@ -78,7 +78,8 @@ main = play display backColor fps world draw handle update
     translatePoints (coord 0 0 2) 5 sph, 
     translatePoints (coord 1 0 0) 5 sph,
     translatePoints (coord 0 1 0) 15 tor,
-    translatePoints (coord 0 (-1) 0) 5 sph]
+    translatePoints (coord 0 (-1) 0) 5 sph,
+    bx]
     (Camera (identity 4) (identity 4)) 
     S.empty 
     Nothing
@@ -96,3 +97,7 @@ uc = meshFromEdges [(coord 0 0 0, 0, [1,3,4])
 (Just sph) = sphere 1 15 13
 
 (Just tor) = torus 1.5 5 14 14
+
+(Just pl) = plane 5 5 5 5
+
+(Just bx) = box 5 5 5 4 4 4

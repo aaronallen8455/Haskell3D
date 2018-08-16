@@ -2,6 +2,8 @@ module Primitives where
 
 import Lib
 import Control.Monad (guard, replicateM)
+import Data.Maybe
+import Debug.Trace
 
 -- | create a circle with given radius and subdivision
 circle :: GU -> Int -> Maybe (Mesh Point)
@@ -89,10 +91,130 @@ torus innerRad outerRad radialSubs circleSubs
 
 --linePoints
 
---plane :: GU -> GU -> Int -> Int -> Maybe (Mesh Point)
---plane width depth wDiv lDiv
+--square :: GU -> GU -> Int -> Int -> Maybe (Mesh Point)
+--square width height wSub hSub
 --  | width <= 0 = Nothing
---  | depth <= 0 = Nothing
---  | wDiv < 0 = Nothing
---  | lDiv < 0 = Nothing
---  | otherwise =
+--  | height <= 0 = Nothing
+--  | wSub < 0 = Nothing
+--  | hSub < 0 = Nothing
+--  | otherwise = Just $ meshFromEdges edges
+--  where
+
+planePoints :: GU -> GU -> Int -> Int -> Maybe [Point]
+planePoints width len wDiv lDiv
+  | any (<= 0) [width, len] = Nothing
+  | any (< 0) [wDiv, lDiv] = Nothing
+  | otherwise = Just [coord x 0 z | x <- ld, z <- wd]
+  where
+    wd = [0, width / fromIntegral (wDiv+1).. width]
+    ld = [0, len / fromIntegral (lDiv+1).. len]
+
+squarePoints :: GU -> GU -> Int -> Int -> Maybe [Point]
+squarePoints width len wDiv lDiv = do
+  points <- planePoints width len wDiv lDiv
+  return . map fst . filter f $ zip points [0..]
+ where
+  f (p, i)
+    | i < wDiv + 2 = True
+    | i >= (wDiv + 2) * (lDiv + 2) - (wDiv + 2) = True
+    | mod i (wDiv + 2) == 0 = True
+    | mod i (wDiv + 2) == wDiv + 1 = True
+    | otherwise = False
+
+plane :: GU -> GU -> Int -> Int -> Maybe (Mesh Point)
+plane width len wDiv lDiv = do
+  points <- flip zip [0..] <$> planePoints width len wDiv lDiv
+  let edges = map makeEdge points
+  return $ meshFromEdges edges
+ where
+   makeEdge (pt, i) = (pt, i, es) where
+     es = catMaybes [l, r, u, d]
+     l = if mod i (wDiv+2) == 0 then Nothing else Just $ i - 1
+     r = if mod i (wDiv+2) == wDiv+1 then Nothing else Just $ i + 1
+     col = div i (wDiv+2)
+     u = if mod col (lDiv+2) == 0 then Nothing else Just $ i - (wDiv+2)
+     d = if mod col (lDiv+2) == lDiv+1 then Nothing else Just $ i + wDiv + 2
+
+box :: GU -> GU -> GU -> Int -> Int -> Int -> Maybe (Mesh Point)
+box width len height wDiv lDiv hDiv = do
+  base <- planePoints width len wDiv lDiv
+  side <- squarePoints width len wDiv lDiv
+  let heightStep = height / fromIntegral (hDiv + 1)
+      sides = concat $ translatePoints (coord 0 1 0) <$> take hDiv [heightStep, heightStep*2..] <*> [side]
+      top = translatePoints (coord 0 1 0) height base
+      points = flip zip [0..] $ base ++ sides ++ top
+      edges = map makeEdge points
+  return $ meshFromEdges edges
+ where
+  baseSize = (wDiv + 2) * (lDiv + 2)
+  numPts = baseSize * 2 + sideSize
+  sideSize = hullSize * hDiv
+  hullSize = (wDiv + 2) * 2 + lDiv * 2
+
+  makeEdge (pt, i) = (pt, i, es) where
+    isBase = i < baseSize
+    isTop = i >= numPts - baseSize
+
+    sideOffset = i - baseSize - hullSize * (levelI - 1)
+
+    levelI | isBase = 0
+           | isTop = hDiv + 1
+           | otherwise = ((i - baseSize) `div` hullSize) + 1
+
+    colI | isBase = mod i (wDiv + 2)
+         | isTop = mod (i - baseSize - sideSize) (wDiv + 2)
+         | rowI == 0 = sideOffset
+         | rowI == lDiv + 1 = sideOffset - wDiv - 2 - lDiv * 2
+         | otherwise = mod (sideOffset - wDiv - 2) 2 * (wDiv + 1)
+
+    rowI | isBase = div i (wDiv + 2)
+         | isTop = div (i - baseSize - sideSize) (wDiv + 2)
+         | sideOffset < wDiv + 2 = 0
+         | sideOffset >= hullSize - wDiv - 2 = lDiv + 1
+         | otherwise = div (sideOffset - wDiv - 2) 2 + 1
+
+    es = catMaybes [l, r, f, b, u, d]
+
+    l | colI == 0 = Nothing
+      | isTop || isBase = Just $ i - 1
+      | rowI == 0 || rowI == lDiv + 1 = Just $ i - 1
+      | otherwise = Nothing
+
+    r | colI == wDiv + 1 = Nothing
+      | isTop || isBase = Just $ i + 1
+      | rowI == 0 || rowI == lDiv + 1 = Just $ i + 1
+      | otherwise = Nothing
+
+    f | rowI == lDiv + 1 = Nothing
+      | isTop || isBase = Just $ i + wDiv + 2
+      | colI /= 0 && colI /= wDiv + 1 = Nothing
+      | rowI == lDiv && colI == wDiv + 1 = Just $ i + wDiv + 2
+      | rowI /= 0 = Just $ i + 2
+      | colI == 0 = Just $ i + wDiv + 2
+      | otherwise = Just $ i + 2
+      
+    b | rowI == 0 = Nothing
+      | isTop || isBase = Just $ i - wDiv - 2
+      | colI /= 0 && colI /= wDiv + 1 = Nothing
+      | rowI == 1 && colI == 0 = Just $ i - wDiv - 2
+      | rowI /= lDiv + 1 = Just $ i - 2
+      | colI == 0 = Just $ i - 2
+      | otherwise = Just $ i - wDiv - 2
+
+    u | isTop = Nothing
+      | not $ any id [rowI == 0, rowI == lDiv + 1, colI == 0, colI == wDiv + 1] = Nothing
+      | levelI == hDiv = Just $ numPts - baseSize + rowI * (wDiv + 2) + colI
+      | not isBase = Just $ i + hullSize
+      | rowI == 0 = Just $ baseSize + i
+      | rowI == lDiv + 1 = Just $ baseSize + wDiv + 2 + 2 * lDiv + colI
+      | colI == 0 = Just $ baseSize + wDiv + 2 + 2 * (rowI - 1)
+      | otherwise = Just $ baseSize + wDiv + 2 + 2 * (rowI - 1) + 1
+    
+    d | isBase = Nothing
+      | not $ any id [rowI == 0, rowI == lDiv + 1, colI == 0, colI == wDiv + 1] = Nothing
+      | levelI == 1 = Just $ rowI * (wDiv + 2) + colI
+      | not isTop = Just $ i - hullSize
+      | rowI == 0 = Just $ numPts - baseSize - hullSize + colI
+      | rowI == lDiv + 1 = Just $ i - baseSize
+      | colI == 0 = Just $ numPts - baseSize - hullSize + wDiv + 2 + 2 * (rowI - 1)
+      | otherwise = Just $ numPts - baseSize - hullSize + wDiv + 2 + 2 * (rowI - 1) + 1

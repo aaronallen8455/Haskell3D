@@ -12,7 +12,6 @@ import Data.Fixed (mod')
 import Data.Foldable hiding (toList)
 import Data.Array
 import Data.Matrix hiding ((!), trace, (<->))
-import qualified Data.IntMap as M
 import qualified Data.Set as S
 import qualified Data.IntSet as IS
 import qualified Data.Vector as V
@@ -43,8 +42,7 @@ type Radian = Double
 type Coord = Matrix Double
 
 coord :: Double -> Double -> Double -> Coord
-coord x y z = fromLists [[x], [y], [z], [1]]
-ncoord x y z = fromLists [[x], [x], [x], [0]]
+coord x y z = fromList 4 1 [x, y, z, 1]
 getX = getElem 1 1
 getY = getElem 2 1
 getZ = getElem 3 1
@@ -58,6 +56,8 @@ type Vect = Point
 
 type Rotation = Coord
 
+-- | Represents a mesh with an array of nodes and a tree which encodes
+-- the edges between nodes.
 data Mesh a = Mesh (Array Int a) (VertTree Int) deriving Show
 
 instance Functor Mesh where
@@ -71,6 +71,8 @@ type TrMatrix = Matrix GU
 type RMatrix = Matrix GU
 type TMatrix = Matrix GU
 
+-- | Represents a viewpoint as a translation matrix and a transformation matrix
+-- which is the rotation matrix multiplied with the translation matrix.
 data Camera = Camera { camTranslation :: TMatrix, camTransformation :: TrMatrix }
 
 -- | A tree of connected verticies, doesn't contain cycles
@@ -142,6 +144,7 @@ renderMeshes cam =
   . map projectedMeshToLines 
   . perspectiveTransform cam
 
+-- | Applies a transformation matrix to a point using matrix multiplication
 applyMatrix :: Matrix GU -> Point -> Point
 applyMatrix = multStd2
   
