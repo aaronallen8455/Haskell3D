@@ -1,24 +1,24 @@
-{-# language RecordWildCards #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Main where
 
-import Lib
-import Primitives
-import Graphics.Gloss hiding (Point, circle)
-import Graphics.Gloss.Interface.Pure.Game hiding (Point, circle)
-import qualified Data.Set as S
-import qualified Data.Vector as V
-import Data.Maybe
-import Debug.Trace
-import Data.Matrix hiding (trace)
+import           Data.Matrix                        hiding (trace)
+import           Data.Maybe
+import qualified Data.Set                           as S
+import qualified Data.Vector                        as V
+import           Debug.Trace
+import           Graphics.Gloss                     hiding (Point, circle)
+import           Graphics.Gloss.Interface.Pure.Game hiding (Point, circle)
+import           Lib
+import           Primitives
 
 windowWidth     = 1200
 windowHeight    = 900
 
-data World = World 
-  { meshes :: [Mesh Point]
-  , camera :: Camera
-  , keys :: S.Set Key
+data World = World
+  { meshes  :: [Mesh Point]
+  , camera  :: Camera
+  , keys    :: S.Set Key
   , picture :: Maybe Picture
   }
 
@@ -72,16 +72,17 @@ main = play display backColor fps world draw handle update
   backColor = dark . dark . dark $ dark blue
   fps = 60
   world = World [
-    scalePoints (coord 0 0.5 0) 2 sph, 
-    translatePoints (coord 0 1 0) 5 sph, 
-    translatePoints (coord 0 0 1) 5 sph, 
-    translatePoints (coord 0 0 2) 5 sph, 
+    --scalePoints (coord 0 0.5 0) 2 sph,
+    --translatePoints (coord 0 1 0) 5 sph,
+    --translatePoints (coord 0 0 1) 5 sph,
+    --translatePoints (coord 0 0 2) 5 sph,
     translatePoints (coord 1 0 0) 5 sph,
     translatePoints (coord 0 1 0) 15 tor,
     translatePoints (coord 0 (-1) 0) 5 sph,
-    bx]
-    (Camera (identity 4) (identity 4)) 
-    S.empty 
+    --bx,
+    dod]
+    (Camera (identity 4) (identity 4))
+    S.empty
     Nothing
 
 uc = meshFromEdges [(coord 0 0 0, 0, [1,3,4])
@@ -100,4 +101,6 @@ uc = meshFromEdges [(coord 0 0 0, 0, [1,3,4])
 
 (Just pl) = plane 5 5 5 5
 
-(Just bx) = box 5 5 5 4 4 4
+(Just bx) = box 5 5 5 2 2 2
+
+(Just dod) = dodecahedron 1

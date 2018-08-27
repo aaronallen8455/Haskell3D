@@ -1,9 +1,9 @@
 module Primitives where
 
-import Lib
-import Control.Monad (guard, replicateM)
-import Data.Maybe
-import Debug.Trace
+import           Control.Monad (guard, replicateM)
+import           Data.Maybe
+import           Debug.Trace
+import           Lib
 
 -- | create a circle with given radius and subdivision
 circle :: GU -> Int -> Maybe (Mesh Point)
@@ -68,7 +68,7 @@ torus innerRad outerRad radialSubs circleSubs
   | any id (map (<0) [innerRad, outerRad]) = Nothing
   | any id (map (<3) [radialSubs, circleSubs]) = Nothing
   | otherwise = do
-    edges <- map makeEdge . zip [0..] . concat 
+    edges <- map makeEdge . zip [0..] . concat
            . zipWith ($) rotate . map (translate . flipUp)
            <$> replicateM radialSubs (circlePoints ((outerRad - innerRad) / 2) circleSubs)
     return $ meshFromEdges edges
@@ -89,17 +89,7 @@ torus innerRad outerRad radialSubs circleSubs
       edges = [up, down, left, right]
 
 
---linePoints
-
---square :: GU -> GU -> Int -> Int -> Maybe (Mesh Point)
---square width height wSub hSub
---  | width <= 0 = Nothing
---  | height <= 0 = Nothing
---  | wSub < 0 = Nothing
---  | hSub < 0 = Nothing
---  | otherwise = Just $ meshFromEdges edges
---  where
-
+-- | Produce a plane of points
 planePoints :: GU -> GU -> Int -> Int -> Maybe [Point]
 planePoints width len wDiv lDiv
   | any (<= 0) [width, len] = Nothing
@@ -109,18 +99,19 @@ planePoints width len wDiv lDiv
     wd = [0, width / fromIntegral (wDiv+1).. width]
     ld = [0, len / fromIntegral (lDiv+1).. len]
 
+-- | Produce a square of points
 squarePoints :: GU -> GU -> Int -> Int -> Maybe [Point]
 squarePoints width len wDiv lDiv = do
   points <- planePoints width len wDiv lDiv
-  return . map fst . filter f $ zip points [0..]
+  let (s, r) = splitAt rw points
+      (m, e) = splitAt (rw * lDiv) r
+  return $ s ++ outer m ++ e
  where
-  f (p, i)
-    | i < wDiv + 2 = True
-    | i >= (wDiv + 2) * (lDiv + 2) - (wDiv + 2) = True
-    | mod i (wDiv + 2) == 0 = True
-    | mod i (wDiv + 2) == wDiv + 1 = True
-    | otherwise = False
+  rw = wDiv + 2
+  outer [] = []
+  outer ps = let (r, rest) = splitAt rw ps in head r : last r : outer rest
 
+-- | Creates a plane
 plane :: GU -> GU -> Int -> Int -> Maybe (Mesh Point)
 plane width len wDiv lDiv = do
   points <- flip zip [0..] <$> planePoints width len wDiv lDiv
@@ -129,12 +120,14 @@ plane width len wDiv lDiv = do
  where
    makeEdge (pt, i) = (pt, i, es) where
      es = catMaybes [l, r, u, d]
-     l = if mod i (wDiv+2) == 0 then Nothing else Just $ i - 1
-     r = if mod i (wDiv+2) == wDiv+1 then Nothing else Just $ i + 1
+     row = mod i (wDiv+2)
+     l = if row == 0 then Nothing else Just $ i - 1
+     r = if row == wDiv+1 then Nothing else Just $ i + 1
      col = div i (wDiv+2)
      u = if mod col (lDiv+2) == 0 then Nothing else Just $ i - (wDiv+2)
      d = if mod col (lDiv+2) == lDiv+1 then Nothing else Just $ i + wDiv + 2
 
+-- | Creates a box
 box :: GU -> GU -> GU -> Int -> Int -> Int -> Maybe (Mesh Point)
 box width len height wDiv lDiv hDiv = do
   base <- planePoints width len wDiv lDiv
@@ -146,6 +139,7 @@ box width len height wDiv lDiv hDiv = do
       edges = map makeEdge points
   return $ meshFromEdges edges
  where
+
   baseSize = (wDiv + 2) * (lDiv + 2)
   numPts = baseSize * 2 + sideSize
   sideSize = hullSize * hDiv
@@ -192,7 +186,7 @@ box width len height wDiv lDiv hDiv = do
       | rowI /= 0 = Just $ i + 2
       | colI == 0 = Just $ i + wDiv + 2
       | otherwise = Just $ i + 2
-      
+
     b | rowI == 0 = Nothing
       | isTop || isBase = Just $ i - wDiv - 2
       | colI /= 0 && colI /= wDiv + 1 = Nothing
@@ -209,7 +203,7 @@ box width len height wDiv lDiv hDiv = do
       | rowI == lDiv + 1 = Just $ baseSize + wDiv + 2 + 2 * lDiv + colI
       | colI == 0 = Just $ baseSize + wDiv + 2 + 2 * (rowI - 1)
       | otherwise = Just $ baseSize + wDiv + 2 + 2 * (rowI - 1) + 1
-    
+
     d | isBase = Nothing
       | not $ any id [rowI == 0, rowI == lDiv + 1, colI == 0, colI == wDiv + 1] = Nothing
       | levelI == 1 = Just $ rowI * (wDiv + 2) + colI
@@ -218,3 +212,20 @@ box width len height wDiv lDiv hDiv = do
       | rowI == lDiv + 1 = Just $ i - baseSize
       | colI == 0 = Just $ numPts - baseSize - hullSize + wDiv + 2 + 2 * (rowI - 1)
       | otherwise = Just $ numPts - baseSize - hullSize + wDiv + 2 + 2 * (rowI - 1) + 1
+
+dodecahedron :: GU -> Maybe (Mesh Point)
+dodecahedron size
+  | size <= 0 = Nothing
+  | otherwise = Just $ meshFromEdges edges where
+    sizeR = [-size, size]
+    gr = (sqrt 5 - 1) / 2
+    grp = [negate gr - 1, gr + 1]
+    grs = [-1 + gr^2, 1 - gr^2]
+    cube = [ coord x y z | x <- sizeR, y <- sizeR, z <- sizeR]
+    cross = [ coord 0 y z | y <- grp, z <- grs ] ++
+            [ coord x y 0 | x <- grp, y <- grs ] ++
+            [ coord x 0 z | x <- grs, z <- grp ]
+    pts = flip zip [0..] $ cube ++ cross
+    -- the first 2 and last 2 of each cross group are connected
+    makeEdge (pt, i) = (pt, i, filter (/= i) [0..length pts - 1])
+    edges = map makeEdge pts

@@ -1,25 +1,25 @@
-{-# language RecordWildCards #-}
-{-# language DeriveFunctor #-}
-{-# language DeriveFoldable #-}
-{-# language DeriveGeneric #-}
-{-# language MultiWayIf #-}
+{-# LANGUAGE DeriveFoldable  #-}
+{-# LANGUAGE DeriveFunctor   #-}
+{-# LANGUAGE DeriveGeneric   #-}
+{-# LANGUAGE MultiWayIf      #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Lib where
 
-import Control.Monad (guard, foldM)
-import Data.Maybe (catMaybes, isNothing, isJust)
-import Data.Fixed (mod')
-import Data.Foldable hiding (toList)
-import Data.Array
-import Data.Matrix hiding ((!), trace, (<->))
-import qualified Data.Set as S
-import qualified Data.IntSet as IS
-import qualified Data.Vector as V
-import GHC.Float
-import qualified Graphics.Gloss as Gloss
-import Debug.Trace
-import Control.Parallel.Strategies
-import GHC.Generics
+import           Control.Monad               (foldM, guard)
+import           Control.Parallel.Strategies
+import           Data.Array
+import           Data.Fixed                  (mod')
+import           Data.Foldable               hiding (toList)
+import qualified Data.IntSet                 as IS
+import           Data.Matrix                 hiding (trace, (!))
+import           Data.Maybe                  (catMaybes, isJust, isNothing)
+import qualified Data.Set                    as S
+import qualified Data.Vector                 as V
+import           Debug.Trace
+import           GHC.Float
+import           GHC.Generics
+import qualified Graphics.Gloss              as Gloss
 
 -- global units
 type GU = Double
@@ -94,9 +94,9 @@ meshFromEdges edges = Mesh items tree where
     (ts, visited'', es'') = foldr f ([], visited', es') children
     f i' k@(acc, visited, es)
       | S.member (min i' i, max i' i) es = k
-      | IS.member i' visited = 
+      | IS.member i' visited =
         (Leaf i' : acc, visited, S.insert (min i' i, max i' i) es)
-      | otherwise = let (t, visited', es') = buildTree i' i visited es 
+      | otherwise = let (t, visited', es') = buildTree i' i visited es
                     in (t:acc, visited', es')
 
 -- | Transform a mesh into a list of Paths to be drawn by Gloss
@@ -109,20 +109,20 @@ projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
   go (c, mbCCoord) (Vertex i cs) = case mbCCoord of
     Just cCoord -> case mbCoord of
       Just pCoord -> [cCoord, pCoord] : concatMap (go p) cs
-      _ -> [cCoord, intersect] : concatMap (go p) cs
+      _           -> [cCoord, intersect] : concatMap (go p) cs
     _ -> case mbCoord of
       Just pCoord -> [intersect, pCoord] : concatMap (go p) cs
-      _ ->concatMap (go p) cs
+      _           ->concatMap (go p) cs
     where
       p@(pc, mbCoord) = v ! i
       intersect = findIntersection pc c
   go (c, mbCCoord) (Leaf i) = case mbCCoord of
     Just cCoord -> case mbCoord of
       Just pCoord -> [[cCoord, pCoord]]
-      _ -> [[cCoord, intersect]]
+      _           -> [[cCoord, intersect]]
     _ -> case mbCoord of
       Just pCoord -> [[intersect, pCoord]]
-      _ -> []
+      _           -> []
     where
       p@(pc, mbCoord) = v ! i
       intersect = findIntersection pc c
@@ -135,19 +135,19 @@ projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
 
 -- | Transforms a list of meshes into a Gloss Picture
 renderMeshes :: Camera -> [Mesh Point] -> Gloss.Picture
-renderMeshes cam = 
+renderMeshes cam =
   Gloss.Color Gloss.white
-  . Gloss.scale gameSize gameSize 
+  . Gloss.scale gameSize gameSize
   . Gloss.pictures
-  . map (Gloss.pictures . map Gloss.line) 
-  . withStrategy (parTraversable rdeepseq) 
-  . map projectedMeshToLines 
+  . map (Gloss.pictures . map Gloss.line)
+  . withStrategy (parTraversable rdeepseq)
+  . map projectedMeshToLines
   . perspectiveTransform cam
 
 -- | Applies a transformation matrix to a point using matrix multiplication
 applyMatrix :: Matrix GU -> Point -> Point
 applyMatrix = multStd2
-  
+
 -- | Takes a list of meshes and projects all the points in each one
 -- into the display screen coordinate space.
 -- Coordinates are Nothing if the point is behind the screen
@@ -165,19 +165,23 @@ perspectiveTransform cam@Camera{..} =
 -- | Translate the camera along a unit vector.
 translateCam :: Vect -> GU -> Camera -> Camera
 translateCam dir d cam@Camera{..} = Camera newT newTR where
+  -- extract orthagonal normal vectors
   [right, up, out] = [V.take 3 $ getRow x camTransformation | x <- [1..3]]
   dir' = fmap (*(-d)) dir
   right' = fmap (* getX dir') right
   up' = fmap (* getY dir') up
   out' = fmap (* getZ dir') out
   all = V.fromList [sum $ map (V.! i) [right', up', out'] | i <- [0..2]]
+  -- make new translation matrix
   newT = mapCol colF 4 camTranslation
-  colF 4 _ = 1
+  colF 4 _  = 1
   colF ri v = v + all V.! (ri-1)
+  -- extract rotation matrix
   rM = mapCol rcf 4 camTransformation
   rcf 4 _ = 1
   rcf _ _ = 0
-  newTR = rM * newT
+  -- get new transformation matrix
+  newTR = rM `multStd2` newT
 
 
 -- | Translate a point along a unit vector
@@ -279,4 +283,4 @@ distance a b
 getCenter :: (Foldable f, Functor f) => f Coord -> Coord
 getCenter cs = div' $ foldr f (coord 0 0 0, 0) cs where
   f x (acc, s) = (acc + x, s + 1)
-  div' (p, t) = (/ t) <$> p -- fix /?
+  div' (p, t) = (/ t) <$> p
