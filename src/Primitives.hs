@@ -4,6 +4,7 @@ import           Control.Monad (guard, replicateM)
 import           Data.Maybe
 import           Debug.Trace
 import           Lib
+import           Data.List (sort, permutations)
 
 -- | create a circle with given radius and subdivision
 circle :: GU -> Int -> Maybe (Mesh Point)
@@ -218,14 +219,68 @@ dodecahedron size
   | size <= 0 = Nothing
   | otherwise = Just $ meshFromEdges edges where
     sizeR = [-size, size]
-    gr = (sqrt 5 - 1) / 2
-    grp = [negate gr - 1, gr + 1]
-    grs = [-1 + gr^2, 1 - gr^2]
+    gri = (sqrt 5 - 1) / 2 * size -- inverse of golden ratio
+    grp = [negate gri - size, gri + size]
+    grs = [-size + gri^2, size - gri^2]
     cube = [ coord x y z | x <- sizeR, y <- sizeR, z <- sizeR]
     cross = [ coord 0 y z | y <- grp, z <- grs ] ++
             [ coord x y 0 | x <- grp, y <- grs ] ++
             [ coord x 0 z | x <- grs, z <- grp ]
     pts = flip zip [0..] $ cube ++ cross
-    -- the first 2 and last 2 of each cross group are connected
-    makeEdge (pt, i) = (pt, i, filter (/= i) [0..length pts - 1])
-    edges = map makeEdge pts
+
+    dists = distances pts
+    findClosest i = map snd . take 3 . sort $ below ++ above where
+      above = dists !! i `zip` [i+1..]
+      below = [x | xi <- [0..i-1], let x = dists !! xi !! (i - xi - 1)] `zip` [0..]
+    
+    edges = [(pt, i, cs) | (pt, i) <- pts, let cs = findClosest i]
+
+icosahedron :: GU -> Maybe (Mesh Point)
+icosahedron size | size <= 0 = Nothing
+icosahedron size = Just $ meshFromEdges edges where
+  gr = (1 + sqrt 5) / 2 * size
+  pts = flip zip [0..] $ do
+    a <- [gr, -gr]
+    b <- [size, -size]
+    [x, y, z] <- [[a, b, 0], [b, 0, a], [0, a, b]]
+    return $ coord x y z
+  dists = distances $ pts
+  findClosest i = map snd . take 5 . sort $ below ++ above where
+    above = dists !! i `zip` [i+1..]
+    below = [x | xi <- [0..i-1], let x = dists !! xi !! (i - xi - 1)] `zip` [0..]
+  
+  edges = [(pt, i, cs) | (pt, i) <- pts, let cs = findClosest i]
+
+buckyball :: GU -> Maybe (Mesh Point)
+buckyball size | size <= 0 = Nothing
+buckyball size = trace (show $ length pts2) Just $ meshFromEdges edges where
+  size' = size / 3
+  gr = (1 + sqrt 5) / 2 * size'
+  pts1 = do
+    a <- [-size', size']
+    b <- [-3*gr, 3*gr]
+    [x, y, z] <- [[0, a, b], [a, b, 0], [b, 0, a]]
+    return $ coord x y z
+  
+  pts2 = do
+    a <- [-2 * size', 2 * size']
+    b <- [-(size' + 2 * gr), size' + 2 * gr]
+    c <- [-gr, gr]
+    [x, y, z] <- [[a, b, c], [b, c, a], [c, a, b]]
+    return $ coord x y z
+  
+  pts3 = do
+    a <- [-size', size']
+    b <- [-gr - 2 * size', gr + 2 * size']
+    c <- [-2 * gr, 2 * gr]
+    [x, y, z] <- [[a, b, c], [b, c, a], [c, a, b]]
+    return $ coord x y z
+  pts = (pts1 ++ pts2 ++ pts3) `zip` [0..]
+  
+  dists = distances pts
+  findClosest i = map snd . take 3 . sort $ below ++ above where
+    above = dists !! i `zip` [i+1..]
+    below = [x | xi <- [0..i-1], let x = dists !! xi !! (i - xi - 1)] `zip` [0..]
+  edges = [(pt, i, cs) | (pt, i) <- pts, let cs = findClosest i]
+
+distances pts = [[ distance pt opt | i < length pts - 1, p <- [i+1..length pts - 1], let (opt, oi) = pts !! p] | (pt, i) <- pts]

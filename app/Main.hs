@@ -73,14 +73,15 @@ main = play display backColor fps world draw handle update
   fps = 60
   world = World [
     --scalePoints (coord 0 0.5 0) 2 sph,
-    --translatePoints (coord 0 1 0) 5 sph,
-    --translatePoints (coord 0 0 1) 5 sph,
-    --translatePoints (coord 0 0 2) 5 sph,
+    translatePoints (coord 0 1 0) 5 sph,
+    translatePoints (coord 0 0 1) 5 sph,
+    translatePoints (coord 0 0 2) 5 sph,
     translatePoints (coord 1 0 0) 5 sph,
     translatePoints (coord 0 1 0) 15 tor,
     translatePoints (coord 0 (-1) 0) 5 sph,
     --bx,
-    dod]
+    bucky,
+    ico]
     (Camera (identity 4) (identity 4))
     S.empty
     Nothing
@@ -95,7 +96,7 @@ uc = meshFromEdges [(coord 0 0 0, 0, [1,3,4])
                    ,(coord 1 1 0, 7, [6,4,3])]
 (Just circ) = circle 1 6
 
-(Just sph) = sphere 1 15 13
+(Just sph) = sphere 1.3 15 13
 
 (Just tor) = torus 1.5 5 14 14
 
@@ -104,3 +105,7 @@ uc = meshFromEdges [(coord 0 0 0, 0, [1,3,4])
 (Just bx) = box 5 5 5 2 2 2
 
 (Just dod) = dodecahedron 1
+
+(Just ico) = icosahedron 3
+
+(Just bucky) = buckyball 20
