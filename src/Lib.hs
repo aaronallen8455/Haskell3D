@@ -102,7 +102,7 @@ meshFromEdges edges = Mesh items tree where
 -- | Transform a mesh into a list of Paths to be drawn by Gloss
 -- The CCoord is Nothing if the point is behind the camera.
 -- if drawing a line from a point behind the camera to one in front, find where
--- the line crosses the xy plane
+-- the line crosses the focal plane
 projectedMeshToLines :: Mesh (Point, Maybe CCoord) -> [Gloss.Path]
 projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
   go :: (Point, Maybe CCoord) -> VertTree Int -> [Gloss.Path]
@@ -136,8 +136,7 @@ projectedMeshToLines (Mesh v (Vertex i cs)) = concatMap (go $ v ! i) cs where
 -- | Transforms a list of meshes into a Gloss Picture
 renderMeshes :: Camera -> [Mesh Point] -> Gloss.Picture
 renderMeshes cam =
-  Gloss.Color Gloss.white
-  . Gloss.scale gameSize gameSize
+  Gloss.scale gameSize gameSize
   . Gloss.pictures
   . map (Gloss.pictures . map Gloss.line)
   . withStrategy (parTraversable rdeepseq)

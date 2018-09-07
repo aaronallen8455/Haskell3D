@@ -1,47 +1,42 @@
 {-# LANGUAGE RecordWildCards #-}
 
-module Main where
-
-import           Data.Matrix                        hiding (trace)
-import           Data.Maybe
-import qualified Data.Set                           as S
-import qualified Data.Vector                        as V
-import           Debug.Trace
+import VectorZipper
+import Lib
+import Primitives
 import           Graphics.Gloss                     hiding (Point, circle)
 import           Graphics.Gloss.Interface.Pure.Game hiding (Point, circle)
-import           Lib
-import           Primitives
+import qualified Data.Set as S
+import Data.Maybe
+import Data.Matrix hiding (trace, fromList)
+import Debug.Trace
 
 windowWidth     = 1200
 windowHeight    = 900
+conwayRate = 0.2
 
 data World = World
   { meshes  :: [Mesh Point]
   , camera  :: Camera
   , keys    :: S.Set Key
-  , picture :: Maybe Picture
+  , picture :: Picture
+  , lastUpdate :: Float
+  , conway :: ZZZ Bool
   }
 
 draw :: World -> Picture
-draw World{..}
-  | (Just pic) <- picture = pic
-  | otherwise = Color white $ renderMeshes camera meshes
+draw World{..} = picture
 
 handle :: Event -> World -> World
-handle (EventKey k s _ _) world@World{..} = world{ picture = pic, keys = keys' } where
+handle (EventKey k s _ _) world@World{..} = world{ keys = keys' } where
   keys' | s == Down = S.insert k keys
         | otherwise = S.delete k keys
-  pic | S.null keys' = picture
-      | otherwise = Nothing
 handle _ x = x
 
 transStep = 0.3 :: GU
 rotStep = pi / 300 :: Radian
 
 update :: Float -> World -> World
-update time world@World{..}
-  | S.null keys && isJust picture = world
-  | otherwise = world{ camera = cam', picture = Just pic }
+update time world@World{..} = world{ camera = cam', picture = pic, conway = conway', meshes = meshes', lastUpdate = lastUpdate' }
   where
     (Camera loc rot) = camera
     -- do camera transformations
@@ -63,7 +58,16 @@ update time world@World{..}
     totalTrans = foldr1 (+) [l, r, f, b, u, d]
     vect = fst $ normalizeVector totalTrans
     cam' = translateCam vect transStep cam
-    pic = Color white $ renderMeshes cam' meshes
+    -- update the conway universe if enough time has elapsed
+    (conway', meshes', lastUpdate') | lastUpdate + time >= conwayRate = 
+                         let c = lifeStep conway in (c, map makeMesh $ getCells c, lastUpdate + time - conwayRate)
+                       | otherwise = (conway, meshes, lastUpdate + time)
+
+    pic = Color white $ renderMeshes cam' meshes'
+
+makeMesh :: (Int, Int, Int) -> Mesh Point
+makeMesh (x, y, z) = translatePoints (coord x' y' z') 1 . fromJust $ box 1 1 1 0 0 0 where
+  [x', y', z'] = map fromIntegral [x, y, z]
 
 main :: IO ()
 main = play display backColor fps world draw handle update
@@ -71,41 +75,26 @@ main = play display backColor fps world draw handle update
   display = InWindow "3d" (windowWidth, windowHeight) (200, 200)
   backColor = dark . dark . dark $ dark blue
   fps = 60
-  world = World [
-    --scalePoints (coord 0 0.5 0) 2 sph,
-    translatePoints (coord 0 1 0) 5 sph,
-    translatePoints (coord 0 0 1) 5 sph,
-    translatePoints (coord 0 0 2) 5 sph,
-    translatePoints (coord 1 0 0) 5 sph,
-    translatePoints (coord 0 1 0) 15 tor,
-    translatePoints (coord 0 (-1) 0) 5 sph,
-    --bx,
-    bucky,
-    ico]
+  world = World []
     (Camera (identity 4) (identity 4))
     S.empty
-    Nothing
+    Blank
+    (-1)
+    initConway
 
-uc = meshFromEdges [(coord 0 0 0, 0, [1,3,4])
-                   ,(coord 0 0 1, 1, [0,2,5])
-                   ,(coord 1 0 1, 2, [1,3,6])
-                   ,(coord 1 0 0, 3, [0,2,7])
-                   ,(coord 0 1 0, 4, [5,7,0])
-                   ,(coord 0 1 1, 5, [4,6,1])
-                   ,(coord 1 1 1, 6, [5,7,2])
-                   ,(coord 1 1 0, 7, [6,4,3])]
-(Just circ) = circle 1 6
+initConway :: ZZZ Bool
+initConway = fromList [[[S.member (x, y, z) glider | z <- [0..14]] | y <- [0..14]] | x <- [0..7] ]
 
-(Just sph) = sphere 1.3 15 13
+glider = S.fromList [
+    (0,0,0), (1,0,0),
+    (0,1,0), (1,1,0),
+    (0,2,0), (1,2,0),
+    (0,2,1), (1,2,1),
+    (0,1,2), (1,1,2),
 
-(Just tor) = torus 1.5 5 14 14
-
-(Just pl) = plane 5 5 5 5
-
-(Just bx) = box 5 5 5 2 2 2
-
-(Just dod) = dodecahedron 1
-
-(Just ico) = icosahedron 3
-
-(Just bucky) = buckyball 20
+    (3,4,3), (3,5,3),
+    (3,4,4), (3,5,4),
+    (3,4,5), (3,5,5),
+    (4,4,5), (4,5,5),
+    (5,4,4), (5,5,4)
+  ]

@@ -283,4 +283,12 @@ buckyball size = trace (show $ length pts2) Just $ meshFromEdges edges where
     below = [x | xi <- [0..i-1], let x = dists !! xi !! (i - xi - 1)] `zip` [0..]
   edges = [(pt, i, cs) | (pt, i) <- pts, let cs = findClosest i]
 
-distances pts = [[ distance pt opt | i < length pts - 1, p <- [i+1..length pts - 1], let (opt, oi) = pts !! p] | (pt, i) <- pts]
+-- | Creates a mapping from a point's index to the distances of all points of a higher index
+distances :: [(Point, Int)] -> [[GU]]
+distances pts = do
+  (pt, i) <- pts
+  guard $ i < length pts - 1
+  return $ do
+    p <- [i+1..length pts - 1]
+    let (opt, oi) = pts !! p
+    return $ distance pt opt
