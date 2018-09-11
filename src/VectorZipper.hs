@@ -1,17 +1,17 @@
+{-# LANGUAGE DeriveFunctor         #-}
+{-# LANGUAGE FlexibleInstances     #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE RecordWildCards #-}
-{-# LANGUAGE DeriveFunctor #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE RecordWildCards       #-}
+{-# LANGUAGE TypeSynonymInstances  #-}
 
-module VectorZipper (fromList, toList, lifeStep, lifeAnimation, getCells, ZZZ) where
+module VectorZipper (fromList, toList, lifeStep, lifeAnimation, getCells, ZZZ, VectorZipper3D(..), fromList', toList', lifeStep', getCells', Indexable(..), getCount, shift') where
 
-import Control.Monad (guard, join)
-import Control.Comonad
-import Control.Comonad.Trans.Class
-import qualified Data.Vector as V
-import Data.Maybe (catMaybes, isJust, fromJust)
+import           Control.Comonad
+import           Control.Comonad.Trans.Class
+import           Control.Monad               (guard, join)
 import           Control.Parallel.Strategies
+import           Data.Maybe                  (catMaybes, fromJust, isJust)
+import qualified Data.Vector                 as V
 
 class Indexable m i where
   (!) :: m a -> i -> a
@@ -60,8 +60,8 @@ instance Indexable (VectorZipperT (VectorZipperT VectorZipper)) (Int, Int, Int) 
   zzz ! (x, y, z) = extract . extract . extract . shift z . runZipperT . shiftT y . runZipperT $ shiftT x zzz
 
 fromList :: [[[a]]] -> ZZZ a
-fromList = VectorZipperT . VectorZipperT . flip VectorZipper 0 . V.fromList 
-         . map (flip VectorZipper 0 . V.fromList) 
+fromList = VectorZipperT . VectorZipperT . flip VectorZipper 0 . V.fromList
+         . map (flip VectorZipper 0 . V.fromList)
          . map (map (flip VectorZipper 0 . V.fromList))
 
 
@@ -95,7 +95,7 @@ conway zzz = case count of
       return $ zzz ! c
     count = length $ filter id vals
 
-    
+
 lifeStep :: ZZZ Bool -> ZZZ Bool
 lifeStep = extend conway
 
@@ -104,8 +104,69 @@ lifeAnimation = iterate lifeStep
 
 -- | Get a list of the living cell coordinates.
 getCells :: ZZZ Bool -> [(Int, Int, Int)]
-getCells = V.toList . join 
+getCells = V.toList . join
          . V.imap f . vector . runZipperT . runZipperT where
   f x = join . V.imap (g x) . vector
   g x y = V.map fromJust . V.filter isJust . V.imap (h x y) . vector
   h x y z b = if b then Just (x, y, z) else Nothing
+
+-- | Will a flattened representation be faster? YES
+data VectorZipper3D a = VectorZipper3D
+  { xDim :: Int
+  , yDim :: Int
+  , zDim :: Int
+  , vect :: V.Vector a
+  , ind  :: (Int, Int, Int)} deriving Functor
+
+shift' :: Int -> Int -> Int -> VectorZipper3D a -> VectorZipper3D a
+shift' x y z vz@VectorZipper3D{..} = vz{ind = (x', y', z')} where
+  (oldX, oldY, oldZ) = ind
+  x' = (oldX + x) `mod` xDim
+  y' = (oldY + y) `mod` yDim
+  z' = (oldZ + z) `mod` zDim
+
+instance Indexable VectorZipper3D (Int, Int, Int) where
+  VectorZipper3D{..} ! (x, y, z) = vect V.! (x' + y' * xDim + z' * xDim * yDim) where
+    (ix, iy, iz) = ind
+    x' = (ix + x) `mod` xDim
+    y' = (iy + y) `mod` yDim
+    z' = (iz + z) `mod` zDim
+
+instance Comonad VectorZipper3D where
+  extract z = z ! (0::Int,0::Int,0::Int)
+  extend f vz@VectorZipper3D{..} = vz{vect = vect'} where
+    vect' = V.imap g vect
+    g i _ = f $ shift' x y z vz where
+      (z, yr) = quotRem i (xDim * yDim)
+      (y, x) = quotRem yr xDim
+
+getCells' :: VectorZipper3D Bool -> [(Int, Int, Int)]
+getCells' vz@VectorZipper3D{..} = [(x, y, z) | z <- [0..zDim], y <- [0..yDim], x <- [0..xDim], vz ! (x,y,z)]
+
+fromList' :: [[[a]]] -> VectorZipper3D a
+fromList' vs = VectorZipper3D x y z v (0, 0, 0) where
+  z = length vs
+  y = length $ head vs
+  x = length . head $ head vs
+  v = V.fromList . concat $ concat vs
+
+toList' :: VectorZipper3D a -> [[[a]]]
+toList' vz@VectorZipper3D{..} =
+  (map . map . map) (vz !) [[[(x, y, z) | x <- [0..xDim-1]] | y <- [0..yDim-1]] | z <- [0..zDim-1]]
+
+getCount :: VectorZipper3D Bool -> VectorZipper3D Int
+getCount = extend go where
+  go :: VectorZipper3D Bool -> Int
+  go vz = length . filter id $ map (vz !) [(x, y, z) :: (Int, Int, Int) | x <- [-1..1], y <- [-1..1], z <- [-1..1], (x,y,z) /= (0,0,0)]
+
+conway' :: VectorZipper3D Bool -> Bool
+conway' vz = case count of
+  5 -> extract vz
+  7 -> extract vz
+  6 -> True
+  _ -> False
+  where
+  count = length . filter id $ map (vz !) [(x, y, z) :: (Int, Int, Int) | x <- [-1..1], y <- [-1..1], z <- [-1..1], (x,y,z) /= (0,0,0)]
+
+lifeStep' :: VectorZipper3D Bool -> VectorZipper3D Bool
+lifeStep' = extend conway'

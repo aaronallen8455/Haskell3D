@@ -1,26 +1,26 @@
 {-# LANGUAGE RecordWildCards #-}
 
-import VectorZipper
-import Lib
-import Primitives
+import           Data.Matrix                        hiding (fromList, trace)
+import           Data.Maybe
+import qualified Data.Set                           as S
+import           Debug.Trace
 import           Graphics.Gloss                     hiding (Point, circle)
 import           Graphics.Gloss.Interface.Pure.Game hiding (Point, circle)
-import qualified Data.Set as S
-import Data.Maybe
-import Data.Matrix hiding (trace, fromList)
-import Debug.Trace
+import           Lib
+import           Primitives
+import           VectorZipper
 
 windowWidth     = 1200
 windowHeight    = 900
 conwayRate = 0.2
 
 data World = World
-  { meshes  :: [Mesh Point]
-  , camera  :: Camera
-  , keys    :: S.Set Key
-  , picture :: Picture
+  { meshes     :: [Mesh Point]
+  , camera     :: Camera
+  , keys       :: S.Set Key
+  , picture    :: Picture
   , lastUpdate :: Float
-  , conway :: ZZZ Bool
+  , conway     :: VectorZipper3D Bool
   }
 
 draw :: World -> Picture
@@ -36,7 +36,7 @@ transStep = 0.3 :: GU
 rotStep = pi / 300 :: Radian
 
 update :: Float -> World -> World
-update time world@World{..} = world{ camera = cam', picture = pic, conway = conway', meshes = meshes', lastUpdate = lastUpdate' }
+update time world@World{..} = world{ camera = cam', picture = pic, conway = conway'', meshes = meshes', lastUpdate = lastUpdate' }
   where
     (Camera loc rot) = camera
     -- do camera transformations
@@ -59,9 +59,10 @@ update time world@World{..} = world{ camera = cam', picture = pic, conway = conw
     vect = fst $ normalizeVector totalTrans
     cam' = translateCam vect transStep cam
     -- update the conway universe if enough time has elapsed
-    (conway', meshes', lastUpdate') | lastUpdate + time >= conwayRate = 
-                         let c = lifeStep conway in (c, map makeMesh $ getCells c, lastUpdate + time - conwayRate)
-                       | otherwise = (conway, meshes, lastUpdate + time)
+    (conway'', meshes', lastUpdate') 
+                      | lastUpdate + time >= conwayRate =
+                        let c = lifeStep' conway in (c, map makeMesh $ getCells' c, lastUpdate + time - conwayRate)
+                      | otherwise = (conway, meshes, lastUpdate + time)
 
     pic = Color white $ renderMeshes cam' meshes'
 
@@ -82,8 +83,8 @@ main = play display backColor fps world draw handle update
     (-1)
     initConway
 
-initConway :: ZZZ Bool
-initConway = fromList [[[S.member (x, y, z) glider | z <- [0..14]] | y <- [0..14]] | x <- [0..7] ]
+initConway :: VectorZipper3D Bool
+initConway = fromList' [[[S.member (x, y, z) glider | x <- [0..14]] | y <- [0..14]] | z <- [0..14] ]
 
 glider = S.fromList [
     (0,0,0), (1,0,0),
