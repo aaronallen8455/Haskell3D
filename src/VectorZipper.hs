@@ -141,7 +141,7 @@ instance Comonad VectorZipper3D where
       (y, x) = quotRem yr xDim
 
 getCells' :: VectorZipper3D Bool -> [(Int, Int, Int)]
-getCells' vz@VectorZipper3D{..} = [(x, y, z) | z <- [0..zDim], y <- [0..yDim], x <- [0..xDim], vz ! (x,y,z)]
+getCells' vz@VectorZipper3D{..} = [(x, y, z) | z <- [0..zDim-1], y <- [0..yDim-1], x <- [0..xDim-1], vz ! (x,y,z)]
 
 fromList' :: [[[a]]] -> VectorZipper3D a
 fromList' vs = VectorZipper3D x y z v (0, 0, 0) where

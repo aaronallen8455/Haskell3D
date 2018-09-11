@@ -81,8 +81,8 @@ main = hspec $ do
       (extract shift2) `shouldBe` True
       (extract shift3) `shouldBe` True
       (extract shift4) `shouldBe` (univ ! ind shift4)
-      --(extract shift5) `shouldBe` True
-      --(extract shift6) `shouldBe` False
+      (extract shift5) `shouldBe` True
+      (extract shift6) `shouldBe` False
   describe "Conways Game of Life" $ do
     it "should have correct initial state" $ do
       (univ ! ((1,1,1)::(Int,Int,Int))) `shouldBe` False
