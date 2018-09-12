@@ -4,7 +4,23 @@
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
 
-module VectorZipper (fromList, toList, lifeStep, lifeAnimation, getCells, ZZZ, VectorZipper3D(..), fromList', toList', lifeStep', getCells', Indexable(..), getCount, shift') where
+module VectorZipper 
+  ( fromList
+  , toList
+  , lifeStep
+  , lifeAnimation
+  , getCells
+  , ZZZ
+  , VectorZipper3D(..)
+  , fromList'
+  , toList'
+  , lifeStep'
+  , lifeStep''
+  , getCells'
+  , Indexable(..)
+  , getCount
+  , shift' 
+  , getCells'' ) where
 
 import           Control.Comonad
 import           Control.Comonad.Trans.Class
@@ -12,6 +28,7 @@ import           Control.Monad               (guard, join)
 import           Control.Parallel.Strategies
 import           Data.Maybe                  (catMaybes, fromJust, isJust)
 import qualified Data.Vector                 as V
+import qualified Data.Array                  as A
 
 class Indexable m i where
   (!) :: m a -> i -> a
@@ -170,3 +187,27 @@ conway' vz = case count of
 
 lifeStep' :: VectorZipper3D Bool -> VectorZipper3D Bool
 lifeStep' = extend conway'
+
+-- | Better to not use Comonad at all?
+lifeStep'' :: A.Array (Int, Int, Int) Bool -> A.Array (Int, Int, Int) Bool
+lifeStep'' a = A.listArray bnds $ map go (A.indices a) where
+  bnds@(_, (maxX, maxY, maxZ)) = A.bounds a
+  go i@(ix, iy, iz) = case count of
+    5 -> a A.! i
+    7 -> a A.! i
+    6 -> True
+    _ -> False
+    where
+      count = length $ filter id coords
+      coords = do
+        dx <- [-1..1]
+        dy <- [-1..1]
+        dz <- [-1..1]
+        let x = (ix + dx) `mod` (maxX + 1)
+            y = (iy + dy) `mod` (maxY + 1)
+            z = (iz + dz) `mod` (maxZ + 1)
+        guard . not $ x == ix && y == iy && z == iz
+        return $ a A.! (x, y, z)
+
+getCells'' :: A.Array (Int, Int, Int) Bool -> [(Int, Int, Int)]
+getCells'' a = filter (a A.!) $ A.indices a

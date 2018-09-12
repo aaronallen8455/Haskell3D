@@ -3,6 +3,7 @@
 import           Data.Matrix                        hiding (fromList, trace)
 import           Data.Maybe
 import qualified Data.Set                           as S
+import qualified Data.Array                         as A
 import           Debug.Trace
 import           Graphics.Gloss                     hiding (Point, circle)
 import           Graphics.Gloss.Interface.Pure.Game hiding (Point, circle)
@@ -12,7 +13,7 @@ import           VectorZipper
 
 windowWidth     = 1200
 windowHeight    = 900
-conwayRate = 0.2
+conwayRate = 0.1
 
 data World = World
   { meshes     :: [Mesh Point]
@@ -20,7 +21,7 @@ data World = World
   , keys       :: S.Set Key
   , picture    :: Picture
   , lastUpdate :: Float
-  , conway     :: VectorZipper3D Bool
+  , conway     :: A.Array (Int, Int, Int) Bool--VectorZipper3D Bool
   }
 
 draw :: World -> Picture
@@ -61,7 +62,7 @@ update time world@World{..} = world{ camera = cam', picture = pic, conway = conw
     -- update the conway universe if enough time has elapsed
     (conway'', meshes', lastUpdate') 
                       | lastUpdate + time >= conwayRate =
-                        let c = lifeStep' conway in (c, map makeMesh $ getCells' c, lastUpdate + time - conwayRate)
+                        let c = lifeStep'' conway in (c, map makeMesh $ getCells'' c, lastUpdate + time - conwayRate)
                       | otherwise = (conway, meshes, lastUpdate + time)
 
     pic = Color white $ renderMeshes cam' meshes'
@@ -83,25 +84,33 @@ main = play display backColor fps world draw handle update
     (-1)
     initConway
 
-initConway :: VectorZipper3D Bool
-initConway = fromList' [[[S.member (x, y, z) glider | x <- [0..15]] | y <- [0..15]] | z <- [0..15] ]
+--initConway :: VectorZipper3D Bool
+--initConway = fromList' [[[S.member (x, y, z) glider | x <- [0..15]] | y <- [0..15]] | z <- [0..15] ]
+initConway :: A.Array (Int, Int, Int) Bool
+initConway = A.array ((0,0,0), (16, 16, 16)) [(i, S.member i glider) | z <- [0..16], y <- [0..16], x <- [0..16], let i = (x,y,z)]
 
 glider = S.fromList [
-    (0,0,0), (1,0,0),
-    (0,1,0), (1,1,0),
-    (0,2,0), (1,2,0),
-    (0,2,1), (1,2,1),
-    (0,1,2), (1,1,2),
+    shft s1 (5,0,0), shft s1 (6,0,0),
+    shft s1 (5,1,0), shft s1 (6,1,0),
+    shft s1 (5,2,0), shft s1 (6,2,0),
+    shft s1 (5,2,1), shft s1 (6,2,1),
+    shft s1 (5,1,2), shft s1 (6,1,2),
 
-    --(3,4,3), (3,5,3),
-    --(3,4,4), (3,5,4),
-    --(3,4,5), (3,5,5),
-    --(4,4,5), (4,5,5),
-    --(5,4,4), (5,5,4)
+    shft s2 (0,0,5), shft s2 (0,0,6),
+    shft s2 (1,0,5), shft s2 (1,0,6),
+    shft s2 (2,0,5), shft s2 (2,0,6),
+    shft s2 (2,1,5), shft s2 (2,1,6),
+    shft s2 (1,2,5), shft s2 (1,2,6),
 
-    (13,14,13), (13,15,13),
-    (13,14,14), (13,15,14),
-    (13,14,15), (13,15,15),
-    (14,14,15), (14,15,15),
-    (15,14,14), (15,15,14)
+    shft s3 (0,1,0), shft s3 (0,2,0),
+    shft s3 (0,1,1), shft s3 (0,2,1),
+    shft s3 (0,1,2), shft s3 (0,2,2),
+    shft s3 (1,1,2), shft s3 (1,2,2),
+    shft s3 (2,1,1), shft s3 (2,2,1)
   ]
+
+s1 = 0
+s2 = 5
+s3 = 10
+
+shft n (x,y,z) = (x+n, y+n, z+n)
