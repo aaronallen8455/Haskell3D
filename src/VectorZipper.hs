@@ -3,6 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards       #-}
 {-# LANGUAGE TypeSynonymInstances  #-}
+{-# LANGUAGE InstanceSigs  #-}
 
 module VectorZipper 
   ( fromList
@@ -30,6 +31,8 @@ import           Data.Maybe                  (catMaybes, fromJust, isJust)
 import qualified Data.Vector                 as V
 import qualified Data.Array                  as A
 
+-- Conor Mcbride "the Abstract"
+
 class Indexable m i where
   (!) :: m a -> i -> a
 
@@ -44,7 +47,8 @@ instance Indexable VectorZipper Int where
     i' = (index + i) `mod` V.length vector
 
 instance Comonad VectorZipper where
-  extract = (! (0 :: Int))
+  extract vz = vz ! (0 :: Int)
+  extend :: (VectorZipper a -> b) -> VectorZipper a -> VectorZipper b
   extend f z@VectorZipper{..} = z { vector = vector' } where
     vector' = V.imap (\i _ -> f $ shift i z) vector
 

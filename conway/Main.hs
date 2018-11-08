@@ -21,7 +21,7 @@ data World = World
   , keys       :: S.Set Key
   , picture    :: Picture
   , lastUpdate :: Float
-  , conway     :: A.Array (Int, Int, Int) Bool--VectorZipper3D Bool
+  , conway     :: VectorZipper3D Bool
   }
 
 draw :: World -> Picture
@@ -62,7 +62,7 @@ update time world@World{..} = world{ camera = cam', picture = pic, conway = conw
     -- update the conway universe if enough time has elapsed
     (conway'', meshes', lastUpdate') 
                       | lastUpdate + time >= conwayRate =
-                        let c = lifeStep'' conway in (c, map makeMesh $ getCells'' c, lastUpdate + time - conwayRate)
+                        let c = lifeStep' conway in (c, map makeMesh $ getCells' c, lastUpdate + time - conwayRate)
                       | otherwise = (conway, meshes, lastUpdate + time)
 
     pic = Color white $ renderMeshes cam' meshes'
@@ -84,10 +84,10 @@ main = play display backColor fps world draw handle update
     (-1)
     initConway
 
---initConway :: VectorZipper3D Bool
---initConway = fromList' [[[S.member (x, y, z) glider | x <- [0..15]] | y <- [0..15]] | z <- [0..15] ]
-initConway :: A.Array (Int, Int, Int) Bool
-initConway = A.array ((0,0,0), (16, 16, 16)) [(i, S.member i glider) | z <- [0..16], y <- [0..16], x <- [0..16], let i = (x,y,z)]
+initConway :: VectorZipper3D Bool
+initConway = fromList' [[[S.member (x, y, z) glider | x <- [0..15]] | y <- [0..15]] | z <- [0..15] ]
+--initConway :: A.Array (Int, Int, Int) Bool
+--initConway = A.array ((0,0,0), (16, 16, 16)) [(i, S.member i glider) | z <- [0..16], y <- [0..16], x <- [0..16], let i = (x,y,z)]
 
 glider = S.fromList [
     shft s1 (5,0,0), shft s1 (6,0,0),

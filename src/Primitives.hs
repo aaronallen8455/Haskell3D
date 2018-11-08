@@ -287,8 +287,10 @@ buckyball size = trace (show $ length pts2) Just $ meshFromEdges edges where
 distances :: [(Point, Int)] -> [[GU]]
 distances pts = do
   (pt, i) <- pts
-  guard $ i < length pts - 1
   return $ do
+    guard $ i < length pts - 1
     p <- [i+1..length pts - 1]
     let (opt, oi) = pts !! p
     return $ distance pt opt
+
+    --[[ distance pt opt | i < length pts - 1, p <- [i+1..length pts - 1], let (opt, oi) = pts !! p] | (pt, i) <- pts]
